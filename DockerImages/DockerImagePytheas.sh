@@ -2,15 +2,16 @@
 # File containing instructions for creating Docker image                #
 #   docker-pytheas containing Pytheas runtime environment               #
 # See DockerSetup.sh for prerequisites                                  #
+# Commands run from cloned classification_extraction_tests repo         #
 #-----------------------------------------------------------------------#
 
-mkdir ~/pytheas_dockerfiles
-cd ~/pytheas_dockerfiles
+mkdir /tmp/pytheas_dockerfiles
+cp -r test_files /tmp/pytheas_dockerfiles
+cd /tmp/pytheas_dockerfiles
 
-# Clone necessary repos
+# Clone Pytheas repo
 
 git clone git@github.com:karenjexphd/pytheas.git
-git clone git@github.com:karenjexphd/test_data_10_tables.git
 
 # Create file containing pip install requirements
 
@@ -142,7 +143,7 @@ COPY pytheas_extract_tables.py pytheas_extract_tables.py
 COPY pytheas_compare.py pytheas_compare.py
 RUN pip3 install -r requirements.txt
 COPY pytheas pytheas 
-COPY test_data_10_tables/simple_test test_data
+COPY test_files test_data
 WORKDIR /app/pytheas/src
 RUN python3 setup.py sdist bdist_wheel
 RUN python3 -m nltk.downloader stopwords
@@ -158,3 +159,5 @@ docker build --tag docker-pytheas .
 
 docker tag docker-pytheas karenjexphd/table_extraction_tests:docker-pytheas
 docker push karenjexphd/table_extraction_tests:docker-pytheas
+
+rm -rf /tmp/pytheas_dockerfiles

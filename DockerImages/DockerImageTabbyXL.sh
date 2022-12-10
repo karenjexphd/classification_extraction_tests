@@ -1,16 +1,17 @@
 #-----------------------------------------------------------------------#
 # File containing instructions for creating Docker image                #
 #   docker-tabby containing TabbyXL runtime environment                 #
-# See PytheasSetup.sh for prerequisites                                 #
+# See DockerSetup.sh for prerequisites                                  #
+# Commands run from cloned classification_extraction_tests repo         #
 #-----------------------------------------------------------------------#
 
-mkdir ~/tabby_dockerfiles
-cd ~/tabby_dockerfiles
+mkdir /tmp/tabby_dockerfiles
+cp -r test_files /tmp/tabby_dockerfiles
+cd /tmp/tabby_dockerfiles
 
-# Clone required repos
+# Clone TabbyXL repo
 
 git clone git@github.com:karenjexphd/tabbyxl.git
-git clone git@github.com:karenjexphd/test_data_10_tables.git
 
 # Create Dockerfile - image based on rockylinux 8
 
@@ -18,7 +19,7 @@ cat > Dockerfile << EOF
 FROM rockylinux:8
 WORKDIR /app
 COPY tabbyxl tabbyxl
-COPY test_data_10_tables/simple_test test_data
+COPY test_files test_data
 RUN yum -y update
 RUN yum -y install git maven
 RUN mvn -f ./tabbyxl/pom.xml clean install
@@ -32,3 +33,5 @@ docker build --tag docker-tabby .
 # Save image to Docker Hub
 docker tag docker-tabby karenjexphd/table_extraction_tests:docker-tabby
 docker push karenjexphd/table_extraction_tests:docker-tabby
+
+rm -rf /tmp/tabby_dockerfiles

@@ -2,15 +2,16 @@
 # File containing instructions for creating Docker images               #
 #   docker-tabby containing TabbyXL runtime environment                 #
 # See DockerSetup.sh for prerequisites                                  #
+# Commands run from cloned classification_extraction_tests repo         #
 #-----------------------------------------------------------------------#
 
-mkdir ~/hypoparsr_dockerfiles
-cd ~/hypoparsr_dockerfiles
+mkdir /tmp/hypoparsr_dockerfiles
+cp -r test_files /tmp/hypoparsr_dockerfiles
+cd /tmp/hypoparsr_dockerfiles
 
-# Clone necessary repos
+# Clone hypoparsr repo
 
 git clone git@github.com:karenjexphd/hypoparsr.git
-git clone git@github.com:karenjexphd/test_data_10_tables.git
 
 # Create script to apply hypoparsr table extraction against given .csv file
 
@@ -37,7 +38,7 @@ WORKDIR /app
 COPY hypoparsr_apply_to_file.r hypoparsr_apply_to_file.r
 COPY hypoparsr_install.r hypoparsr_install.r
 COPY hypoparsr hypoparsr
-COPY test_data_10_tables/simple_test test_data
+COPY test_files test_data
 RUN Rscript hypoparsr_install.r
 EOF
 
@@ -49,4 +50,6 @@ docker build --tag docker-hypoparsr .
 
 docker tag docker-hypoparsr karenjexphd/table_extraction_tests:docker-hypoparsr
 docker push karenjexphd/table_extraction_tests:docker-hypoparsr
+
+rm -rf /tmp/hypoparsr_dockerfiles
 
