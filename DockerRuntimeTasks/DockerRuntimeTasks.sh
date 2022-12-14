@@ -3,8 +3,66 @@
 #-----------------------------------------------------------------------#
 # Runtime commands to perform end to end table extraction tests         #
 # Goal: compare the Pytheas, Hypoparsr and TabbyXL table extraction     #
-#       against the Pytheas demo file using the Pytheas evaluation      #
+#       against the specified file using the Pytheas evaluation         #
 #-----------------------------------------------------------------------#
+
+#-----------------------------------------------------------------------#
+#                   -- Process Input Parameters --                      #
+#-----------------------------------------------------------------------#
+
+# NOTE: Currently no checks in place to confirm that the files exist
+#       Files must exist inside the Docker container
+
+while getopts 'p:c:x:g:h' OPTION; do
+    case "$OPTION" in 
+        p)
+          filepath=$OPTARG
+          ;;
+        c)
+          csv_input="$OPTARG"
+          ;;
+        x)
+          xls_annotated_input="$OPTARG"
+          ;;
+        g)
+          ground_truth=$OPTARG
+          ;;
+        h)
+          echo "script usage: $0 [-p filepath] [-c csvfile] [-x xlsxfile] [-g ground_truth]"
+          echo "-p   filepath:     path to input files"
+          echo "                   default value: /app/test_data/pytheas_demo_file"
+          echo
+          echo "-c   csvfile:      name of input for Pytheas and Hypoparsr table extraction"
+          echo "                   default value: demo.csv"
+          echo
+          echo "-x   xlsxfile:      name of (annotated) input for TabbyXL table extraction"
+          echo "                   default value: demo_a.xlsx"
+          echo
+          echo "-g   ground_truth: name of file containing Pytheas ground truth"
+          echo "                   default value: demo.json"
+          echo
+          exit 0
+          ;;
+        ?)
+          echo "script usage: $0 [-p filepath] [-c csvfile] [-x xlsxfile] [-g ground_truth]"
+          exit 1
+          ;;
+    esac
+done
+
+# DEFAULTS: 
+#     Input file path: /app/test_data/pytheas_demo_file
+#     Input files:     demo.csv    for Pytheas and Hypoparsr
+#                      demo_a.xlsx annotated xlsx file for TabbyXL
+#                      demo.json   ground truth data in Pytheas format
+
+filepath=${filepath:-/app/test_data/pytheas_demo_file}
+csv_input=${csv_input:-demo.csv}
+xls_annotated_input=${xls_annotated_input:-demo_a.xlsx}
+ground_truth=${ground_truth:-demo.json}
+
+echo "File used for Pytheas and Hypoparsr table extraction: " $csv_input
+echo "File used for TabbyXL table extraction: " $xls_annotated_input
 
 #-----------------------------------------------------------------------#
 #                         -- Prerequisites --                           #
@@ -36,26 +94,9 @@
 
 # print messages only if verbose mode chosen
 
-# add usage/help/man to script
-
-# replace "sleep 5" after steps to perform table extractions:
-# alternatives:
-#  i. remove "d" from -di in docker run commands. 
-#      Container would no longer run in background
-#     + : no need to check for processes to complete or to sleep
-#     - : have to wait for each to complete before starting next
-#  ii. loop to check that processes have completed before continuing
-#     + : can run containers in background and therefore in parallel
-#     - : more complex
-
 #-----------------------------------------------------------------------#
 #                           -- OVERVIEW --                              #
 #-----------------------------------------------------------------------#
-
-# Input file location:  /app/test_data (inside containers)
-# Pytheas Input:        demo.csv
-# Pytheas GT:           demo.json
-# Tabby Input:          demo_a.xls   (annotated spreadsheet generated from demo.csv)
 
 # Tasks:
 # 1. Clean up from previous tests and setup for current test
@@ -76,14 +117,14 @@
 #                            -- TASKS --                                #
 #-----------------------------------------------------------------------#
 
+#----- 1. Clean up from previous tests and setup for current test  -----#
+
+#----- 1a. Set parameters                                          -----#
+
 echo INFO: Beginning tests : $(date)
 today=$(date +"%d_%m_%Y")
 export outputdir=/tmp/test_$today
 echo INFO: Output will be written to $outputdir
-
-#----- 1. Clean up from previous tests and setup for current test  -----#
-
-#----- 1a. Set parameters                                          -----#
 
 export methods="pytheas tabbyxl hypoparsr"
 
@@ -110,17 +151,9 @@ mkdir $outputdir
 
 #----- 2. Run table extractions                                    -----#
 
-# for each method:
-#  - create container from docker-$method image
-#  - run extract tables script
-#  - tested logging in as current user via --user $(id -u):$(id -g)
-#             - files no longer owned by root but:
-#             - not necessary
-#             - breaks Pytheas
-
 #----- 2a. Pytheas table extraction                                -----#
 
-# run pytheas_extract_tables.py against demo.csv
+# run pytheas_extract_tables.py against $csv_input file
 # will generate pytheas_tables.json (discovered_tables format) in $outputdir
 
 echo
@@ -128,8 +161,8 @@ echo INFO: Running Pytheas table extraction
 
 docker run \
  --mount type=bind,source=$outputdir,target=/app/outputdir \
- -di karenjexphd/table_extraction_tests:docker-pytheas \
- bash -c "python3 pytheas_extract_tables.py test_data/demo.csv \
+ -i karenjexphd/table_extraction_tests:docker-pytheas \
+ bash -c "python3 pytheas_extract_tables.py ${filepath}/${csv_input} \
           > outputdir/pytheas_tables.json"
 
 #----- 2b. Hypoparsr table extraction                              -----#
@@ -142,31 +175,26 @@ echo INFO: Running Hypoparsr table extraction
 
 docker run \
  --mount type=bind,source=$outputdir,target=/app/outputdir \
- -di karenjexphd/table_extraction_tests:docker-hypoparsr \
- bash -c "Rscript hypoparsr_apply_to_file.r test_data/demo.csv \
+ -i karenjexphd/table_extraction_tests:docker-hypoparsr \
+ bash -c "Rscript hypoparsr_apply_to_file.r ${filepath}/${csv_input} \
           > outputdir/hypoparsr.out"
 
 #----- 2c. Tabby table extraction                                  -----#
 
-# run Tabby table extraction on demo_a.xlsx (annotated version of demo.csv)
-# will generate demo_a_0_0.xlsx in $outputdir
+# run Tabby table extraction on $xls_annotated_input (annotated version of $csv_input)
+# will generate fileame_0_0.xlsx in $outputdir
 
 echo
 echo INFO: Running TabbyXL table extraction
 
 docker run \
  --mount type=bind,source=$outputdir,target=/app/outputdir \
- -di karenjexphd/table_extraction_tests:docker-tabby \
+ -i karenjexphd/table_extraction_tests:docker-tabby \
  bash -c "java -Xmx1024m \
                -jar tabbyxl/target/TabbyXL-1.1.1-jar-with-dependencies.jar \
-               -input test_data/demo_a.xlsx \
+               -input ${filepath}/${xls_annotated_input} \
                -ruleset tabbyxl/examples/rules/smpl.crl \
-               -output outputdir"
-
-#-- ! TEMP - SLEEP 5 SECONDS TO ALLOW PROCESSES TO COMPLETE ! --#
-echo
-echo INFO: Waiting 5 seconds for processes to complete 
-sleep 5 
+               -output outputdir/tabby_out"
 
 #-----------------------------------------------------------------------#
 
@@ -199,17 +227,41 @@ write_discovered_tables(){
 EOF
 }
 
+write_discovered_table(){
+  ti_val=$1      # table index
+  bb_val=$2
+  de_val=$3
+  ds_val=$4
+  tb_val=$5
+  discovered_table="$ti_val: { 'aggregation_scope': {},
+         'bottom_boundary': $bb_val,
+         'columns': {   0: {'column_header': [], 'table_column': 0 }},
+         'data_end': $de_val,
+         'data_end_confidence': 1.0,
+         'data_start': $ds_val,
+         'fdl_confidence': {   'avg_confusion_index': 0.5,
+                               'avg_difference': 0.5,
+                               'avg_majority_confidence': 0.5,
+                               'softmax': 0.5},
+         'footnotes': [],
+         'header': [],
+         'subheader_scope': {},
+         'top_boundary': $tb_val }"
+  echo $discovered_table
+}
+
 # 3a. map Hypoparsr output
 
 # Hypoparsr output is in tabular format with line numbers alongside the data rows
-# data_end = max(first word in hypoparsr.out) - 1
-# data_start = min(first word in hypoparsr.out) - 1
+#   data_end = max(first word in hypoparsr.out) - 1
+#   data_start = min(first word in hypoparsr.out) - 1
 # in each case, ignore line(s) starting with blank space
 # don't have a value for top boundary. Temporarily using data_start - 1
 
 tables_in=${outputdir}/hypoparsr.out
 tables_out=${outputdir}/hypoparsr_tables.json
 
+ti_val=1
 de_val=$((`grep -v "^ " $tables_in | sort -g -r | awk '{print $1}' | head -1`-1))
 bb_val=$de_val
 ds_val=$((`grep -v "^ " $tables_in | sort -g | awk '{print $1}' | head -1`-1))
@@ -217,12 +269,13 @@ tb_val=$((ds_val - 1))
 
 echo
 echo INFO: Mapping Hypoparsr output to Pytheas discovered_tables format
-echo "  Data end: " $de_val
-echo "  Bottom boundary: " $bb_val 
-echo "  Data start: " $ds_val
-echo "  Top Boundary: " $tb_val
 
-write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
+echo "{" > $tables_out
+disovered_table=$(write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val)
+echo $discovered_table >> $tables_out
+echo "}" >> $tables_out
+
+#write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
 
 # 3b. map TabbyXL output
 #     (mapping is currently a manual operation - must be automated)
@@ -232,35 +285,47 @@ write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
 # Note: this leaves the PROVENANCE column from both sheets empty
 #       because the information from the hyperlinks isn't extracted
 
-xlsx2csv -s 2 $outputdir/demo_a_0_0.xlsx $outputdir/demo_out_entries.csv
-xlsx2csv -s 3 $outputdir/demo_a_0_0.xlsx $outputdir/demo_out_labels.csv
-
-# data_start      = (min numeric part of 2nd col (PROVENANCE) from demo_out_entries.csv) -1 
-# data_end        = (max numeric part of 2nd col (PROVENANCE) from demo_out_entries.csv) -1
-# top_boundary    = (min numeric part of 2nd col (PROVENANCE) from demo_out_labels.csv) -1
-# bottom_boundary = (max numeric part of 2nd col (PROVENANCE) from demo_out_labels.csv) -1
-
-# temporary: hardcode values for bottom_boundary, top_boundary, data_start and data_end:
-
-tables_out=$outputdir/tabbyxl_tables.json 
-de_val=11 
-bb_val=11 
-ds_val=5 
-tb_val=4 
-
 echo
-echo INFO: Mapping TabbyXL output to Pytheas discovered_tables format 
-echo "  Data end: " $de_val 
-echo "  Bottom boundary: " $bb_val 
-echo "  Data start: " $ds_val 
-echo "  Top Boundary: " $tb_val 
+echo INFO: Mapping TabbyXL output to Pytheas discovered_tables format
 
-write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
+tables_out=$outputdir/tabbyxl_tables.json
+
+ti_val=0
+echo "{" > $tables_out
+# Loop through files generated by table extraction
+for file in $(ls $outputdir/tabby_out)
+do
+  if [$ti_val -eq 0]
+  then
+    echo "," >> $tables_out    # add a comma after each table
+  fi  
+  let "ti_val+=1"
+  filename=$(basename -s .xlsx $file)
+  xlsx2csv -s 2 $file $outputdir/${filename}_entries.csv
+  xlsx2csv -s 3 $file $outputdir/${filename}_labels.csv
+  # data_start      = (min numeric part of 2nd col (PROVENANCE) from filename_entries.csv) -1 
+  # data_end        = (max numeric part of 2nd col (PROVENANCE) from filename_entries.csv) -1
+  # top_boundary    = (min numeric part of 2nd col (PROVENANCE) from filename_labels.csv) -1
+  # bottom_boundary = (max numeric part of 2nd col (PROVENANCE) from filename_labels.csv) -1
+
+  # temporary: hardcode values for bottom_boundary, top_boundary, data_start and data_end:
+  de_val=11 
+  bb_val=11 
+  ds_val=5 
+  tb_val=4 
+
+  disovered_table=$(write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val)
+  echo $discovered_table >> $tables_out
+
+done
+echo "}" >> $tables_out
+
+#write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
 
 # 4. Perform Pytheas evaluation on TabbyXL, Hypoparsr and Pytheas table extraction output
 
 #    Parameters for pytheas_evaluate.py script:
-#       1 (input): Ground truth for demo.csv
+#       1 (input): Ground truth file
 #       2 (input): discovered tables from associated table extraction 
 #       3 (output): <method>_confusion.out
 #       4 (output): <method>_confidences.out
@@ -273,15 +338,10 @@ do
   confusion_file=outputdir/${method}_confusion.out
   confidences_file=outputdir/${method}_confidences.out
   docker run --mount type=bind,source=$outputdir,target=/app/outputdir \
-             -di karenjexphd/table_extraction_tests:docker-pytheas \
+             -i karenjexphd/table_extraction_tests:docker-pytheas \
              bash -c "python3 pytheas_evaluate.py \
-                      test_data/demo.json $tables_file $confusion_file $confidences_file"
+                      ${filepath}/${ground_truth} $tables_file $confusion_file $confidences_file"
 done
-
-#-- ! TEMP - SLEEP 2 SECONDS TO ALLOW CONTAINERS TO COMPLETE TASKS ! --#
-echo
-echo INFO: Waiting 2 seconds for processes to complete 
-sleep 2
 
 # 5. Compare evaluation output for Pytheas, Hypoparsr and TabbyXL
 
