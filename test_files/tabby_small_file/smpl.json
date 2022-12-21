@@ -1,0 +1,45 @@
+{
+	"blanklines": [0, 6, 7, 8, 14, 15, 16, 22, 23, 24, 25, 32],
+	"tables": [{
+		"table_counter": 1,
+		"top_boundary": 1,
+		"bottom_boundary": 5,
+		"data_start": 3,
+		"data_end": 5,
+		"headnotes": [1, 2],
+		"header": [1, 2],
+		"subheaders": [],
+		"data_indexes": [3, 4, 5],
+		"first_data_line": 3,
+		"not_data": [1, 2],
+		"footnotes": []
+	           },
+                   {
+                "table_counter": 2,
+                "top_boundary": 9,
+                "bottom_boundary": 13,
+                "data_start": 11,
+                "data_end": 13,
+                "headnotes": [9, 10],
+                "header": [9, 10],
+                "subheaders": [],
+                "data_indexes": [11, 12, 13],
+                "first_data_line": 11,
+                "not_data": [9, 10],
+                "footnotes": []
+                   },
+                   {
+                "table_counter": 3,
+                "top_boundary": 17,
+                "bottom_boundary": 21,
+                "data_start": 19,
+                "data_end": 21,
+                "headnotes": [17, 18],
+                "header": [17, 18],
+                "subheaders": [],
+                "data_indexes": [19, 20, 21],
+                "first_data_line": 19,
+                "not_data": [17, 18],
+                "footnotes": []
+                   }]
+}

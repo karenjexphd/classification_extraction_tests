@@ -11,7 +11,7 @@
 #-----------------------------------------------------------------------#
 
 # NOTE: Currently no checks in place to confirm that the files exist
-#       Files must exist inside the Docker container
+#       Directory containing the files will be mounted to the container at runtime
 
 while getopts 'p:c:x:g:h' OPTION; do
     case "$OPTION" in 
@@ -77,13 +77,13 @@ echo "File used for TabbyXL table extraction: " $xls_annotated_input
 
 # xlsx2csv utility used to help map Tabby output => Pytheas format
 # installed via : sudo apt install xlsx2csv
+# OR/
+# xlsx2csv.py script available - add to one of the container images?
+# Pytheas makes sense because it already has Python available
 
 #-----------------------------------------------------------------------#
 #                            -- TO DO --                                #
 #-----------------------------------------------------------------------#
-
-# allow for multiple demo_a_n_n.xlsx files (multiple tables in input)
-# loop through $outputdir and process all files with xlsx2csv
 
 # automate remaining steps in mapping TabbyXL output to pytheas format
 
@@ -161,8 +161,9 @@ echo INFO: Running Pytheas table extraction
 
 docker run \
  --mount type=bind,source=$outputdir,target=/app/outputdir \
+ --mount type=bind,source=$filepath,target=/app/inputdir,readonly \
  -i karenjexphd/table_extraction_tests:docker-pytheas \
- bash -c "python3 pytheas_extract_tables.py ${filepath}/${csv_input} \
+ bash -c "python3 pytheas_extract_tables.py inputdir/${csv_input} \
           > outputdir/pytheas_tables.json"
 
 #----- 2b. Hypoparsr table extraction                              -----#
@@ -175,8 +176,9 @@ echo INFO: Running Hypoparsr table extraction
 
 docker run \
  --mount type=bind,source=$outputdir,target=/app/outputdir \
+ --mount type=bind,source=$filepath,target=/app/inputdir,readonly \
  -i karenjexphd/table_extraction_tests:docker-hypoparsr \
- bash -c "Rscript hypoparsr_apply_to_file.r ${filepath}/${csv_input} \
+ bash -c "Rscript hypoparsr_apply_to_file.r inputdir/${csv_input} \
           > outputdir/hypoparsr.out"
 
 #----- 2c. Tabby table extraction                                  -----#
@@ -189,10 +191,12 @@ echo INFO: Running TabbyXL table extraction
 
 docker run \
  --mount type=bind,source=$outputdir,target=/app/outputdir \
+ --mount type=bind,source=$filepath,target=/app/inputdir,readonly \
+ -u 1000:1000 \
  -i karenjexphd/table_extraction_tests:docker-tabby \
  bash -c "java -Xmx1024m \
                -jar tabbyxl/target/TabbyXL-1.1.1-jar-with-dependencies.jar \
-               -input ${filepath}/${xls_annotated_input} \
+               -input inputdir/${xls_annotated_input} \
                -ruleset tabbyxl/examples/rules/smpl.crl \
                -output outputdir/tabby_out"
 
@@ -200,32 +204,7 @@ docker run \
 
 # 3. Map output to Pytheas discovered_tables format
 
-# create function write_discovered_tables with discovered_tables template
-
-write_discovered_tables(){
-  tables_out=$1
-  ti_val=1	# table index: always 1 until support is added for multiple tables
-  bb_val=$2
-  de_val=$3
-  ds_val=$4
-  tb_val=$5
-  cat > $tables_out << EOF
-{   $ti_val: { 'aggregation_scope': {},
-         'bottom_boundary': $bb_val,
-         'columns': {   0: {'column_header': [], 'table_column': 0 }},
-         'data_end': $de_val,
-         'data_end_confidence': 1.0,
-         'data_start': $ds_val,
-         'fdl_confidence': {   'avg_confusion_index': 0.5,
-                               'avg_difference': 0.5,
-                               'avg_majority_confidence': 0.5,
-                               'softmax': 0.5},
-         'footnotes': [],
-         'header': [],
-         'subheader_scope': {},
-         'top_boundary': $tb_val }}
-EOF
-}
+# create function write_discovered_table based on discovered_tables template
 
 write_discovered_table(){
   ti_val=$1      # table index
@@ -233,21 +212,23 @@ write_discovered_table(){
   de_val=$3
   ds_val=$4
   tb_val=$5
-  discovered_table="$ti_val: { 'aggregation_scope': {},
-         'bottom_boundary': $bb_val,
-         'columns': {   0: {'column_header': [], 'table_column': 0 }},
-         'data_end': $de_val,
-         'data_end_confidence': 1.0,
-         'data_start': $ds_val,
-         'fdl_confidence': {   'avg_confusion_index': 0.5,
-                               'avg_difference': 0.5,
-                               'avg_majority_confidence': 0.5,
-                               'softmax': 0.5},
-         'footnotes': [],
-         'header': [],
-         'subheader_scope': {},
-         'top_boundary': $tb_val }"
-  echo $discovered_table
+  t_out=$6
+  cat >> $t_out << EOF
+  $ti_val: { 'aggregation_scope': {},
+         'bottom_boundary': $bb_val, 
+         'columns': {   0: {'column_header': [], 'table_column': 0 }}, 
+         'data_end': $de_val, 
+         'data_end_confidence': 1.0, 
+         'data_start': $ds_val, 
+         'fdl_confidence': {   'avg_confusion_index': 0.5, 
+                               'avg_difference': 0.5, 
+                               'avg_majority_confidence': 0.5, 
+                               'softmax': 0.5}, 
+         'footnotes': [], 
+         'header': [], 
+         'subheader_scope': {}, 
+         'top_boundary': $tb_val } 
+EOF
 }
 
 # 3a. map Hypoparsr output
@@ -271,14 +252,11 @@ echo
 echo INFO: Mapping Hypoparsr output to Pytheas discovered_tables format
 
 echo "{" > $tables_out
-disovered_table=$(write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val)
-echo $discovered_table >> $tables_out
+write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val $tables_out
 echo "}" >> $tables_out
 
-#write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
-
 # 3b. map TabbyXL output
-#     (mapping is currently a manual operation - must be automated)
+#     (mapping is currently a manual operation - must be automated - still working on xls2csv)
 
 # first step in automating mapping:
 # convert sheets 2 & 3 from tabby output to csv using xlsx2csv
@@ -295,14 +273,19 @@ echo "{" > $tables_out
 # Loop through files generated by table extraction
 for file in $(ls $outputdir/tabby_out)
 do
-  if [$ti_val -eq 0]
+  if [ $ti_val -gt 0 ]
   then
     echo "," >> $tables_out    # add a comma after each table
   fi  
-  let "ti_val+=1"
+  ((ti_val++))
   filename=$(basename -s .xlsx $file)
-  xlsx2csv -s 2 $file $outputdir/${filename}_entries.csv
-  xlsx2csv -s 3 $file $outputdir/${filename}_labels.csv
+
+  python3 utils/xlsx2csv.py --hyperlinks -s 2 $outputdir/tabby_out/$file $outputdir/${filename}_entries.csv
+  python3 utils/xlsx2csv.py --hyperlinks -s 3 $outputdir/tabby_out/$file $outputdir/${filename}_labels.csv
+
+  # xlsx2csv -s 2 $file $outputdir/${filename}_entries.csv
+  # xlsx2csv -s 3 $file $outputdir/${filename}_labels.csv
+
   # data_start      = (min numeric part of 2nd col (PROVENANCE) from filename_entries.csv) -1 
   # data_end        = (max numeric part of 2nd col (PROVENANCE) from filename_entries.csv) -1
   # top_boundary    = (min numeric part of 2nd col (PROVENANCE) from filename_labels.csv) -1
@@ -314,13 +297,9 @@ do
   ds_val=5 
   tb_val=4 
 
-  disovered_table=$(write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val)
-  echo $discovered_table >> $tables_out
-
+  write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val $tables_out
 done
 echo "}" >> $tables_out
-
-#write_discovered_tables $tables_out $bb_val $de_val $ds_val $tb_val
 
 # 4. Perform Pytheas evaluation on TabbyXL, Hypoparsr and Pytheas table extraction output
 
@@ -338,9 +317,10 @@ do
   confusion_file=outputdir/${method}_confusion.out
   confidences_file=outputdir/${method}_confidences.out
   docker run --mount type=bind,source=$outputdir,target=/app/outputdir \
-             -i karenjexphd/table_extraction_tests:docker-pytheas \
+   --mount type=bind,source=$filepath,target=/app/inputdir,readonly \
+           -i karenjexphd/table_extraction_tests:docker-pytheas \
              bash -c "python3 pytheas_evaluate.py \
-                      ${filepath}/${ground_truth} $tables_file $confusion_file $confidences_file"
+                      inputdir/${ground_truth} $tables_file $confusion_file $confidences_file"
 done
 
 # 5. Compare evaluation output for Pytheas, Hypoparsr and TabbyXL
