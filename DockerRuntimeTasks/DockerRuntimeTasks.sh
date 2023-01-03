@@ -75,17 +75,9 @@ echo "File used for TabbyXL table extraction: " $xls_annotated_input
 #    sudo usermod -a -G <group> <username>
 #    sudo usermod -a -G docker karen
 
-# xlsx2csv utility used to help map Tabby output => Pytheas format
-# installed via : sudo apt install xlsx2csv
-# OR/
-# xlsx2csv.py script available - add to one of the container images?
-# Pytheas makes sense because it already has Python available
-
 #-----------------------------------------------------------------------#
 #                            -- TO DO --                                #
 #-----------------------------------------------------------------------#
-
-# automate remaining steps in mapping TabbyXL output to pytheas format
 
 # use for-loop to evaluate each of the methods 
 
@@ -256,12 +248,7 @@ write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val $tables_out
 echo "}" >> $tables_out
 
 # 3b. map TabbyXL output
-#     (mapping is currently a manual operation - must be automated - still working on xls2csv)
-
-# first step in automating mapping:
-# convert sheets 2 & 3 from tabby output to csv using xlsx2csv
-# Note: this leaves the PROVENANCE column from both sheets empty
-#       because the information from the hyperlinks isn't extracted
+#     (mapping is currently a manual operation - must be automated)
 
 echo
 echo INFO: Mapping TabbyXL output to Pytheas discovered_tables format
@@ -280,24 +267,9 @@ do
   ((ti_val++))
   filename=$(basename -s .xlsx $file)
 
-  python3 utils/xlsx2csv.py --hyperlinks -s 2 $outputdir/tabby_out/$file $outputdir/${filename}_entries.csv
-  python3 utils/xlsx2csv.py --hyperlinks -s 3 $outputdir/tabby_out/$file $outputdir/${filename}_labels.csv
+  # get boundary info from output excel file and add table to discovered_tables file
+  python3 utils/write_tabby_discovered_table.py $outputdir/tabby_out/$file $tables_out $ti_val 
 
-  # xlsx2csv -s 2 $file $outputdir/${filename}_entries.csv
-  # xlsx2csv -s 3 $file $outputdir/${filename}_labels.csv
-
-  # data_start      = (min numeric part of 2nd col (PROVENANCE) from filename_entries.csv) -1 
-  # data_end        = (max numeric part of 2nd col (PROVENANCE) from filename_entries.csv) -1
-  # top_boundary    = (min numeric part of 2nd col (PROVENANCE) from filename_labels.csv) -1
-  # bottom_boundary = (max numeric part of 2nd col (PROVENANCE) from filename_labels.csv) -1
-
-  # temporary: hardcode values for bottom_boundary, top_boundary, data_start and data_end:
-  de_val=11 
-  bb_val=11 
-  ds_val=5 
-  tb_val=4 
-
-  write_discovered_table $ti_val $bb_val $de_val $ds_val $tb_val $tables_out
 done
 echo "}" >> $tables_out
 
