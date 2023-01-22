@@ -36,26 +36,54 @@ pprint(file_annotations)
 EOF
 
 # Create script to perform just extract_tables() to get discovered_tables
-# TO DO: save the output directly to a file instead of using pprint() :
-#    with open('outputdir/discovered_tables.json', 'w') as f:
-#        f.write(discovered_tables)
+
+# NEW VERSION
 
 cat > pytheas_extract_tables.py << EOF
+
+# input:  argv[1] directory containing input (csv) files
+#         argv[2] filename of csv file being processed
+
 import sys
+import json
 from nltk.corpus import stopwords
 from pytheas import pytheas
 from pprint import pprint
 import pytheas.file_utilities as file_utils
+
 mypytheas = pytheas.PYTHEAS()
 mypytheas.load_weights('/app/pytheas/src/pytheas/trained_rules.json')
 blank_lines = []
-filepath = str(sys.argv[1])
-file_dataframe=file_utils.get_dataframe(filepath, None)
+
+inputdir = str(sys.argv[1])
+filename = str(sys.argv[2])
+inputfile = inputdir + "/" + filename
+
+file_dataframe=file_utils.get_dataframe(inputfile, None)
 file_dataframe_trimmed=file_dataframe
 discovered_tables = mypytheas.extract_tables(file_dataframe_trimmed, blank_lines)
+
 pprint(discovered_tables)
+
 EOF
 
+# Create script to call pytheas table extraction for each csv file in input directory
+
+cat > pytheas_extract_tables.sh << EOF
+inputdir=\$1
+outputdir=\$2
+for file in \$(ls \$inputdir)
+do
+  if [[ \$file == *.csv ]]
+  then
+    basefile=\$(basename \$file .csv)
+    outputfile=\${outputdir}/\${basefile}_discovered_tables.json
+    python3 pytheas_extract_tables.py \$inputdir \$file > \$outputfile
+  fi
+done
+EOF
+
+chmod u+x pytheas_extract_tables.sh
 
 # Create Python script to perform evaluation of table extraction
 
@@ -140,6 +168,7 @@ COPY requirements.txt requirements.txt
 COPY pytheas_apply_to_file.py pytheas_apply_to_file.py 
 COPY pytheas_evaluate.py pytheas_evaluate.py
 COPY pytheas_extract_tables.py pytheas_extract_tables.py
+COPY pytheas_extract_tables.sh pytheas_extract_tables.sh
 COPY pytheas_compare.py pytheas_compare.py
 RUN pip3 install -r requirements.txt
 COPY pytheas pytheas 
