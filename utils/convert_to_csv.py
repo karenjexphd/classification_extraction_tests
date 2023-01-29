@@ -4,19 +4,21 @@ from openpyxl import load_workbook
 import csv
 import sys
 
-filepath = str(sys.argv[1])
+infilepath = str(sys.argv[1])
 filename = str(sys.argv[2])
+outfilepath = str(sys.argv[3])
 
-basename= filename.split('.')[0]
+#basename= filename.split('.')[0]
 
-full_filename=filepath+'/'+filename
+full_filename=infilepath+'/'+filename
 
 wb = load_workbook(full_filename)
 
 # print ('sheet names:',wb.sheetnames)
 
 for sheet in wb.sheetnames:
-    csv_filename=filepath+'/'+basename+'_'+sheet+'.csv'
+    # csv_filename=filepath+'/'+basename+'_'+sheet+'.csv'
+    csv_filename=outfilepath+'/'+sheet+'.csv'
     # print('ws:',ws)
     ws=wb[sheet]
     data=list(ws.rows)

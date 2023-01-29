@@ -1,0 +1,17 @@
+{
+         "blanklines": [],
+         "tables": [{
+                 "table_counter": 1,
+                 "top_boundary": 1,
+                 "bottom_boundary": 29,
+                 "data_start": 2,
+                 "data_end": 29,
+                 "headnotes": [],
+                 "header": [],
+                 "subheaders": [],
+                 "data_indexes": [],
+                 "first_data_line": 2,
+                 "not_data": [],
+                 "footnotes": []
+         }]
+ }
