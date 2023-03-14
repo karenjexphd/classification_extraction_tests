@@ -1,53 +1,54 @@
-INSERT INTO entry_label
-(entry_cell_id,
-label_cell_id
-)
-VALUES
-(94,93),
-(94,86),
-(94,88),
-(94,92),
-(95,93),
-(95,86),
-(95,89),
-(95,92),
-(96,93),
-(96,87),
-(96,90),
-(96,92),
-(97,93),
-(97,87),
-(97,91),
-(97,92),
-(99,98),
-(99,86),
-(99,88),
-(99,92),
-(100,98),
-(100,86),
-(100,89),
-(100,92),
-(101,98),
-(101,87),
-(101,90),
-(101,92),
-(102,98),
-(102,87),
-(102,91),
-(102,92),
-(105,104),
-(105,86),
-(105,88),
-(105,103),
-(106,104),
-(106,86),
-(106,89),
-(106,103),
-(107,104),
-(107,86),
-(107,90),
-(107,103),
-(108,104),
-(108,86),
-(108,91),
-(108,103);
+\echo Insert into entry_label for table 0
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id) 
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id 
+and cv.cell_address='L3T3R3B3'and cv.table_id=0 and label_value in ('i','a','c','g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id) 
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id 
+and cv.cell_address='L4T3R4B3'and cv.table_id=0 and label_value in ('i','a','d','g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id) 
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id 
+and cv.cell_address='L5T3R5B3'and cv.table_id=0 and label_value in ('i','b','e','g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id) 
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id 
+and cv.cell_address='L6T3R6B3'and cv.table_id=0 and label_value in ('i','b','f','g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L3T4R3B4'and cv.table_id=0 and label_value in ('j','a','c','g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L4T4R4B4'and cv.table_id=0 and label_value in ('j', 'a', 'd', 'g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L5T4R5B4'and cv.table_id=0 and label_value in ('j', 'b', 'e', 'g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L6T4R6B4'and cv.table_id=0 and label_value in ('j', 'b', 'f', 'g');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L3T5R3B5'and cv.table_id=0 and label_value in ('k', 'a', 'c', 'h');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L4T5R4B5'and cv.table_id=0 and label_value in ('k', 'a', 'd', 'h');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L5T5R5B5'and cv.table_id=0 and label_value in ('k', 'b', 'e', 'h');
+
+INSERT INTO table_model.entry_label (entry_cell_id, label_cell_id)
+SELECT cv.cell_id, l.label_cell_id from tabby_cell_view cv, tabby_label_view l where l.table_id = cv.table_id
+and cv.cell_address='L6T5R6B5'and cv.table_id=0 and label_value in ('k', 'b', 'f', 'h');
+
+\echo Insert into entry_label for table 1
+
+\echo Insert into entry_label for table 2
+
