@@ -1,5 +1,10 @@
 \echo Create FK constraints on table_model tables
 
+\echo Create constraints on source_table
+
+ALTER TABLE table_model.source_table
+ADD CONSTRAINT uk_source_table UNIQUE (file_name, sheet_number, table_number); 
+
 \echo Create constraints on table_cell
 
 ALTER TABLE table_model.table_cell

@@ -1,4 +1,18 @@
 
+\echo Create view table_start_view
+
+DROP VIEW IF EXISTS table_start_view CASCADE;
+CREATE VIEW table_start_view AS
+SELECT
+  table_id,
+  table_start,
+  regexp_replace(table_start,'[0-9]','','g') as start_col,
+  cast(regexp_replace(table_start,'[a-zA-Z]','','g') as INTEGER) as start_row
+  FROM source_table;
+
+ALTER VIEW table_start_view OWNER TO table_model;
+
+
 \echo Create view tabby_cell_view
 \echo Uses table_start to convert cell addresses to physical location in input file
 

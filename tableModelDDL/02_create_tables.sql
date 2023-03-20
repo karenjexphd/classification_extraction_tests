@@ -4,7 +4,10 @@
 
 CREATE TABLE IF NOT EXISTS table_model.source_table
 (
-  table_id integer,
+  table_id integer generated always as identity,
+  file_name text,
+  sheet_number integer,
+  table_number integer,
   table_start text,
   table_end text,
   PRIMARY KEY (table_id)
@@ -13,6 +16,10 @@ CREATE TABLE IF NOT EXISTS table_model.source_table
 ALTER TABLE table_model.source_table OWNER TO table_model;
 
 COMMENT ON TABLE table_model.source_table IS 'Collection of cells that has been identified as a table';
+COMMENT ON COLUMN table_model.source_table.table_id IS 'surrogate key to uniquely identify table';
+COMMENT ON COLUMN table_model.source_table.file_name IS 'name of input file';
+COMMENT ON COLUMN table_model.source_table.sheet_number IS 'identifier of sheet within input file';
+COMMENT ON COLUMN table_model.source_table.table_number IS 'identified of table within sheet';
 COMMENT ON COLUMN table_model.source_table.table_start IS 'position of cell directly above and to left of table. Position (0,0) within table';
 COMMENT ON COLUMN table_model.source_table.table_end IS 'position of cell directly below and to right of table';
 
