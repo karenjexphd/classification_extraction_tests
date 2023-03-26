@@ -30,7 +30,8 @@ SELECT
   'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row 
     as cell_address, 
   chr(ts.start_col + tc.left_col)||(ts.start_row + tc.top_row) AS cell_provenance,
-  cell_content 
+  cell_content,
+  cell_annotation 
 FROM table_cell tc 
 JOIN table_start ts
 ON   tc.table_id = ts.table_id;
