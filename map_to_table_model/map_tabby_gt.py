@@ -199,5 +199,6 @@ cur.execute(select_ctv)
 canonical_table = cur.fetchall()
 print(canonical_table)
 
-cur.execute('COMMIT;')
+# Don't commit (at least during initial testing - will decide later whether or not data is to be kept)
+#cur.execute('COMMIT;')
 cur.close()
