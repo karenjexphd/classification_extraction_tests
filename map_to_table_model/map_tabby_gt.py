@@ -7,7 +7,7 @@ import psycopg2
 # Tables to populate:
 #    source_table  DONE
 #    table_cell    DONE
-#    category      DONE         -- Should category contain a table_id ?
+#    category      DONE
 #    entry         DONE
 #    label         DONE (except parent info)
 #    entry_label   DONE
@@ -20,20 +20,22 @@ import psycopg2
 
 # input_file has been hardcoded for testing. Will be provided as input parameter
 
-input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/tabby/smpl_0_0.xlsx"
+# input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/tabby/smpl_0_0.xlsx"
+input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_10_files/gt/C10001.xlsx"
 
 #input_file = str(sys.argv[1])       # Tabby format GT file (.xlsx in same format as Tabby extracted tables file)
 
 # filename, sheet number (will be identified from the input_file name)
 
-filename='smpl'
-sheetnum=0
-tablenum=0
+f=input_file.split('/')
+filename=f[len(f)-1].split('.')[0]
+sheetnum=0      # DO WE NEED THIS? INFO IS IN FILENAME
+tablenum=0      # DO WE NEED THIS? INFO IS IN FILENAME
 
 # table_start and table_end (will have been identified in previous step from original input_file)
 
-tablestart='A1'
-tableend='H7'
+tablestart='A2'
+tableend='U12'
 
 tablestart_col=''.join(filter(str.isalpha, tablestart))        # alpha part
 tablestart_row=int(''.join(filter(str.isdigit, tablestart)))   # numeric part
@@ -72,12 +74,12 @@ print(table_id)
 
 # get start_col, start_row from table_start_view
 
-select_stmt="SELECT start_col, start_row FROM table_start_view WHERE table_id="+str(table_id)
-cur.execute(select_stmt)
-row = cur.fetchone()
-start_col = row[0]
-start_row = row[1]
-print(start_col, start_row)
+# select_stmt="SELECT start_col, start_row FROM table_start_view WHERE table_id="+str(table_id)
+# cur.execute(select_stmt)
+# row = cur.fetchone()
+# start_col = row[0]
+# start_row = row[1]
+# print(start_col, start_row)
 
 # load the workbook and get data from the required sheets (ENTRIES and LABELS):
 
@@ -138,6 +140,9 @@ insert_stmt="INSERT INTO entry (entry_cell_id) \
              WHERE table_id="+str(table_id)+" AND cell_annotation='DATA'"
 cur.execute(insert_stmt)
 
+# Temporary commit (during testing)
+cur.execute('COMMIT;')
+
 # Populate label_temp temporary table from LABELS sheet
 
 for row in all_labels_rows:
@@ -149,12 +154,21 @@ for row in all_labels_rows:
         label_prov=label_prov_text.split('","')[1].split('")')[0]      # get display val between '","' and '")'
         label_prov_col=''.join(filter(str.isalpha, label_prov))        # alpha part
         label_prov_row=int(''.join(filter(str.isdigit, label_prov)))   # numeric part        
-        insert_stmt="INSERT INTO label_temp (label_value, label_provenance, label_provenance_col, label_provenance_row, label_parent, label_category) \
-                     VALUES ('"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_par+"', '"+label_cat+"')"
+        # print(label_par)
+        if label_par=='None':
+            insert_stmt="INSERT INTO label_temp (label_value, label_provenance, label_provenance_col, label_provenance_row, label_category) \
+                        VALUES ('"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_cat+"')"
+        else:
+            label_par_prov=label_par.split('[')[1].split(']')[0]           # get val between '[' and ']'
+            insert_stmt="INSERT INTO label_temp (label_value, label_provenance, label_provenance_col, label_provenance_row, label_parent, label_category) \
+                        VALUES ('"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_par_prov+"', '"+label_cat+"')"
         cur.execute(insert_stmt)
 
 insert_stmt="insert into category (category_name) select distinct label_category from label_temp"
 cur.execute(insert_stmt)
+
+# Temporary commit (during testing)
+cur.execute('COMMIT;')
 
 # Populate table_cell based on label_temp and source_table contents
 
@@ -169,16 +183,35 @@ insert_stmt="INSERT INTO table_cell \
             FROM label_temp"
 cur.execute(insert_stmt)
 
+# Temporary commit (during testing)
+cur.execute('COMMIT;')
+
 # Populate label based on table_cell and label_temp
 #     need to add parent info
 
-insert_stmt="INSERT INTO label (label_cell_id, category_name) \
-             SELECT tcv.cell_id, lt.label_category \
-             FROM tabby_cell_view tcv \
-             JOIN label_temp lt \
-             ON tcv.cell_provenance=lt.label_provenance  \
+# insert_stmt="INSERT INTO label (label_cell_id, category_name) \
+#              SELECT tcv.cell_id, lt.label_category \
+#              FROM tabby_cell_view tcv \
+#              JOIN label_temp lt \
+#              ON tcv.cell_provenance=lt.label_provenance  \
+#              WHERE tcv.table_id="+str(table_id)+" AND tcv.cell_annotation='HEADING'"
+# cur.execute(insert_stmt)
+
+# Temporarily dropped FK constraint: alter table label drop constraint fk_parent_label;
+
+insert_stmt="INSERT INTO label (label_cell_id, category_name, parent_label_cell_id) \
+             SELECT tcv.cell_id, lt.label_category, tpcv.cell_id \
+             FROM label_temp lt \
+             JOIN tabby_cell_view tcv \
+             ON lt.label_provenance=tcv.cell_provenance  \
+             LEFT JOIN tabby_cell_view tpcv \
+             ON lt.label_parent=tpcv.cell_provenance  \
              WHERE tcv.table_id="+str(table_id)+" AND tcv.cell_annotation='HEADING'"
 cur.execute(insert_stmt)
+
+# Temporary commit (during testing)
+cur.execute('COMMIT;')
+
 
 # Populate entry_label from entry_label_temp and tabby_cell_view
 
@@ -189,16 +222,19 @@ insert_el="INSERT INTO entry_label (entry_cell_id, label_cell_id) \
            JOIN tabby_cell_view l_cell ON elt.label_provenance = l_cell.cell_provenance"
 cur.execute(insert_el)
 
+# Temporary commit (during testing)
+cur.execute('COMMIT;')
+
 # Generate canonical_table_view and display contents
 
-create_ctv="CALL create_canonical_table_view("+str(table_id)+")"
+create_ctv="CALL create_tabby_canonical_table_view("+str(table_id)+")"
 cur.execute(create_ctv)
 
-select_ctv="SELECT * FROM canonical_table_view"
+select_ctv="SELECT * FROM tabby_canonical_table_view"
 cur.execute(select_ctv)
 canonical_table = cur.fetchall()
 print(canonical_table)
 
 # Don't commit (at least during initial testing - will decide later whether or not data is to be kept)
-#cur.execute('COMMIT;')
+cur.execute('COMMIT;')
 cur.close()

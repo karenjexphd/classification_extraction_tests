@@ -62,6 +62,7 @@ SELECT
  cv.table_id,
  cv.cell_id as label_cell_id,
  cv.cell_content as label_value,
+ parent_cell.cell_content||' | '||cv.cell_content as label_display_value,
  cv.cell_provenance as label_provenance,
  l.category_name as category,
  parent_cell.cell_id as parent_label_cell_id,
@@ -88,19 +89,20 @@ SELECT
   label_cell.cell_id as label_cell_id,
   label_cell.cell_content as label_value,
   label_cell.cell_provenance as label_provenance,
-  l.category_name as category
+  tlv.label_display_value,
+  tlv.category
 FROM entry_label el
 JOIN tabby_cell_view entry_cell
 ON   el.entry_cell_id = entry_cell.cell_id
-JOIN label l
-ON   el.label_cell_id = l.label_cell_id 
+JOIN tabby_label_view tlv
+ON   el.label_cell_id = tlv.label_cell_id 
 JOIN tabby_cell_view label_cell
 ON   el.label_cell_id = label_cell.cell_id;
 
 ALTER VIEW tabby_entry_label_view OWNER TO table_model;
 
 
-CREATE OR REPLACE PROCEDURE create_canonical_table_view (in_table_id NUMERIC)
+CREATE OR REPLACE PROCEDURE create_tabby_canonical_table_view (in_table_id NUMERIC)
 AS $$
 DECLARE rec RECORD;
 DECLARE str text;
@@ -117,15 +119,24 @@ str := '"Entry Value" text,';
     str:= substring(str, 0, length(str));
 
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS tablefunc;
-    DROP VIEW IF EXISTS canonical_table_view;
-    CREATE VIEW canonical_table_view AS
+    DROP VIEW IF EXISTS tabby_canonical_table_view;
+    CREATE VIEW tabby_canonical_table_view AS
     SELECT *
-    FROM crosstab(''SELECT entry_value, category, label_value FROM tabby_entry_label_view WHERE table_id='|| in_table_id ||' ORDER BY 1'',
+    FROM crosstab(''SELECT entry_value, category, label_display_value FROM tabby_entry_label_view WHERE table_id='|| in_table_id ||' ORDER BY 1'',
                   ''SELECT DISTINCT category FROM tabby_entry_label_view WHERE table_id='|| in_table_id ||' ORDER BY 1'')
          AS final_result ('|| str ||')';
-    ALTER VIEW canonical_table_view OWNER TO table_model;
+    ALTER VIEW tabby_canonical_table_view OWNER TO table_model;
 END;
 $$ LANGUAGE plpgsql;
 
-ALTER PROCEDURE create_canonical_table_view OWNER TO table_model;
+ALTER PROCEDURE create_tabby_canonical_table_view OWNER TO table_model;
+
+
+CREATE OR REPLACE VIEW pytheas_canonical_table_view
+AS
+SELECT st.table_id, st.file_name, st.table_number, tc.top_row AS table_row, (st.table_start::integer)+tc.top_row AS row_provenance, tc.cell_annotation
+FROM source_table st JOIN table_cell tc ON st.table_id = tc.table_id
+ORDER BY cell_annotation DESC;
+
+ALTER VIEW pytheas_canonical_table_view OWNER TO table_model;
 
