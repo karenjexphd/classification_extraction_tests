@@ -13,10 +13,5 @@ $psql_phd_pg -f $script_dir/01_create_user.sql
 $psql_phd_tm -f $script_dir/02_create_tables.sql
 $psql_phd_tm -f $script_dir/03_create_contstraints.sql
 $psql_phd_tm -f $script_dir/04_create_views.sql
+$psql_phd_tm -f $script_dir/05_create_temp_tables.sql
 
-# Insert test data
-
-$psql_phd_tm -f $script_dir/test_input/01_insert_table_cell.sql  
-$psql_phd_tm -f $script_dir/test_input/02_insert_entry.sql  
-$psql_phd_tm -f $script_dir/test_input/03_insert_category_label.sql  
-$psql_phd_tm -f $script_dir/test_input/04_insert_entry_label.sql

@@ -1,16 +1,18 @@
 
-\echo Create view table_start_view
+-- NO LONGER NEED table_start_view - HAVE INCLUDED START_COL AND START_ROW IN SOURCE_TABLE
 
-DROP VIEW IF EXISTS table_start_view CASCADE;
-CREATE VIEW table_start_view AS
-SELECT
-  table_id,
-  table_start,
-  regexp_replace(table_start,'[0-9]','','g') as start_col,
-  cast(regexp_replace(table_start,'[a-zA-Z]','','g') as INTEGER) as start_row
-  FROM source_table;
+-- \echo Create view table_start_view
 
-ALTER VIEW table_start_view OWNER TO table_model;
+-- DROP VIEW IF EXISTS table_start_view CASCADE;
+-- CREATE VIEW table_start_view AS
+-- SELECT
+--   table_id,
+--   table_start,
+--   regexp_replace(table_start,'[0-9]','','g') as start_col,
+--   cast(regexp_replace(table_start,'[a-zA-Z]','','g') as INTEGER) as start_row
+--   FROM source_table;
+
+-- ALTER VIEW table_start_view OWNER TO table_model;
 
 
 \echo Create view tabby_cell_view
@@ -18,23 +20,16 @@ ALTER VIEW table_start_view OWNER TO table_model;
 
 DROP VIEW IF EXISTS tabby_cell_view CASCADE;
 CREATE VIEW tabby_cell_view AS
-WITH table_start AS (
-  SELECT
-  st.table_id,
-  ascii(regexp_replace(st.table_start,'[0-9]','','g')) as start_col,
-  cast(regexp_replace(st.table_start,'[a-zA-Z]','','g') as INTEGER) as start_row
-  FROM source_table st)
 SELECT 
-  ts.table_id,
+  st.table_id,
   tc.cell_id, 
-  'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row 
-    as cell_address, 
-  chr(ts.start_col + tc.left_col)||(ts.start_row + tc.top_row) AS cell_provenance,
+  'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row as cell_address, 
+  chr(ascii(st.table_start_col) + tc.left_col)||(st.table_start_row + tc.top_row) AS cell_provenance,
   cell_content,
   cell_annotation 
 FROM table_cell tc 
-JOIN table_start ts
-ON   tc.table_id = ts.table_id;
+JOIN source_table st
+ON   tc.table_id = st.table_id;
 
 ALTER VIEW tabby_cell_view OWNER TO table_model;
 
@@ -139,4 +134,26 @@ FROM source_table st JOIN table_cell tc ON st.table_id = tc.table_id
 ORDER BY cell_annotation DESC;
 
 ALTER VIEW pytheas_canonical_table_view OWNER TO table_model;
+
+
+# TO DO: REPLACE table_row WITH ID OF ROW IN DATAFRAME (ie DELETE max(top_row) WHERE cell_annotation='HEADING')
+CREATE OR REPLACE VIEW hypoparsr_canonical_table_view
+AS
+SELECT st.table_id, 
+       st.file_name, 
+       st.table_number, 
+       col_headings.cell_content AS column_heading,
+       tc.top_row AS table_row,
+       tc.cell_content 
+FROM  source_table st 
+JOIN  table_cell tc 
+      ON st.table_id = tc.table_id
+JOIN  table_cell col_headings 
+      ON tc.table_id = col_headings.table_id
+      AND tc.left_col = col_headings.left_col
+WHERE tc.cell_annotation='DATA'
+AND   col_headings.cell_annotation='HEADING'
+ORDER BY 1, 2, 3, 5, 4;
+
+ALTER VIEW hypoparsr_canonical_table_view OWNER TO table_model;
 

@@ -8,8 +8,10 @@ CREATE TABLE IF NOT EXISTS table_model.source_table
   file_name text,
   sheet_number integer,
   table_number integer,
-  table_start text,
-  table_end text,
+  table_start_col text,
+  table_start_row integer,
+  table_end_col text,
+  table_end_row integer,
   PRIMARY KEY (table_id)
 );
 
@@ -20,8 +22,10 @@ COMMENT ON COLUMN table_model.source_table.table_id IS 'surrogate key to uniquel
 COMMENT ON COLUMN table_model.source_table.file_name IS 'name of input file';
 COMMENT ON COLUMN table_model.source_table.sheet_number IS 'identifier of sheet within input file';
 COMMENT ON COLUMN table_model.source_table.table_number IS 'identified of table within sheet';
-COMMENT ON COLUMN table_model.source_table.table_start IS 'position of cell directly above and to left of table. Position (0,0) within table';
-COMMENT ON COLUMN table_model.source_table.table_end IS 'position of cell directly below and to right of table';
+COMMENT ON COLUMN table_model.source_table.table_start_col IS 'position of column directly to left of table. Column 0 within table';
+COMMENT ON COLUMN table_model.source_table.table_start_row IS 'position of row directly above table. Row 0 within table';
+COMMENT ON COLUMN table_model.source_table.table_end_col IS 'position of column directly to right of table.';
+COMMENT ON COLUMN table_model.source_table.table_end_row IS 'position of row directly below table.';
 
 \echo Create table table_cell
 

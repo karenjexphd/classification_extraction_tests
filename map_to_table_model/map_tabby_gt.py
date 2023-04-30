@@ -2,45 +2,49 @@ from openpyxl import load_workbook
 import sys 
 import psycopg2
 
-# Goal: extract information from given Tabby ground truth file and map it to table model
+# Goals: 
+#   Extract information from given Tabby ground truth file and map it to table model
+#   Display full & correct information for the processed table in the view canonical_table_view
+#   This can then be compared to the canonical_table_view extracted during the table extraction process
 
-# Tables to populate:
-#    source_table  DONE
-#    table_cell    DONE
-#    category      DONE
-#    entry         DONE
-#    label         DONE (except parent info)
-#    entry_label   DONE
-# Interim tables:
-#    entry_temp
-#    label_temp
-#    entry_label_temp
-# Goal:
-#    canonical_table_view displays full & correct information for the processed table
 
-# input_file has been hardcoded for testing. Will be provided as input parameter
+# 1. Process input (Tabby ground truth) file (filename_<sheetnum>_<tablenum>.xlsx)
 
-# input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/tabby/smpl_0_0.xlsx"
+#    Note: a tabby GT file contains a single table
+
+#    input_file has been hardcoded during unit testing. 
+#    Will be provided as input parameter during end-to-end tests:
+
+#input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/tabby/smpl_0_0.xlsx"
 input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_10_files/gt/C10001.xlsx"
 
 #input_file = str(sys.argv[1])       # Tabby format GT file (.xlsx in same format as Tabby extracted tables file)
 
-# filename, sheet number (will be identified from the input_file name)
+#    Get base filename based on input_file path and name
 
 f=input_file.split('/')
 filename=f[len(f)-1].split('.')[0]
-sheetnum=0      # DO WE NEED THIS? INFO IS IN FILENAME
-tablenum=0      # DO WE NEED THIS? INFO IS IN FILENAME
 
-# table_start and table_end (will have been identified in previous step from original input_file)
+#    Sheet number and table number
+#    Hardcoded here, but can be identified from the input_file name for tabby files
+
+sheetnum=0
+tablenum=0
+
+#    table_start and table_end have been hardcoded during unit testing. 
+#    Will be provided as input parameter during end-to-end tests
+#    (will have been identified in a previous step from the original input_file):
 
 tablestart='A2'
 tableend='U12'
 
-tablestart_col=''.join(filter(str.isalpha, tablestart))        # alpha part
-tablestart_row=int(''.join(filter(str.isdigit, tablestart)))   # numeric part
+tablestart_col=''.join(filter(str.isalpha, tablestart))        # alpha part, e.g. "A" from "A2"
+tablestart_row=int(''.join(filter(str.isdigit, tablestart)))   # numeric part, e.g. 12 from "U12"
 
-# Connect to table_model database
+tableend_col=''.join(filter(str.isalpha, tableend))        # alpha part, e.g. "A" from "A2"
+tableend_row=int(''.join(filter(str.isdigit, tableend)))   # numeric part, e.g. 12 from "U12"
+
+# 2. Create connection to table_model database with search_path set to table_model
 
 tm_conn = psycopg2.connect(
     host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
@@ -50,21 +54,22 @@ tm_conn = psycopg2.connect(
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
 
-# Create temp tables (temporarily created permanent tables in DB to allow them to be viewed from other sessions)
+# Create temporary input tables 
+# Have temporarily created as permanent tables in DB during testing
+# to allow them to be viewed after the script is run
 
 #cur.execute('CREATE TEMPORARY TABLE entry_temp (entry_value text, entry_provenance text, entry_provenance_col text, entry_provenance_row integer, entry_labels text)')
 #cur.execute('CREATE TEMPORARY TABLE label_temp (label_value text, label_provenance text, label_provenance_col text, label_provenance_row integer, label_parent text, label_category text)')
 #cur.execute('CREATE TEMPORARY TABLE entry_label_temp (entry_provenance text, label_provenance text)')
 
-# Insert into source_table
+# Populate source_table
+# with a single row describing the table being processed
 
-    # What if table has already been processed - do a delete (cascade)? stop processing?
-
-insert_stmt="INSERT INTO source_table (table_start, table_end, file_name, sheet_number, table_number) \
-             VALUES ('"+tablestart+"', '"+tableend+"', '"+filename+"', "+str(sheetnum)+", "+str(tablenum)+")"
+insert_stmt="INSERT INTO source_table (table_start_col, table_start_row, table_end_col, table_end_row, file_name, sheet_number, table_number) \
+             VALUES ('"+tablestart_col+"', "+str(tablestart_row)+", '"+tableend_col+"', "+str(tableend_row)+", '"+filename+"', "+str(sheetnum)+", "+str(tablenum)+")"
 cur.execute(insert_stmt)
 
-# get table_id
+# retrieve (automatically generated) table_id from source_table
 
 select_stmt="SELECT table_id FROM source_table \
              WHERE file_name='"+filename+"' AND sheet_number="+str(sheetnum)+" AND table_number="+str(tablenum)
@@ -72,55 +77,60 @@ cur.execute(select_stmt)
 table_id = cur.fetchone()[0]
 print(table_id)
 
-# get start_col, start_row from table_start_view
-
-# select_stmt="SELECT start_col, start_row FROM table_start_view WHERE table_id="+str(table_id)
-# cur.execute(select_stmt)
-# row = cur.fetchone()
-# start_col = row[0]
-# start_row = row[1]
-# print(start_col, start_row)
-
-# load the workbook and get data from the required sheets (ENTRIES and LABELS):
+# load the input file as a workbook and get data from the required sheets (ENTRIES and LABELS):
 
 wb         = load_workbook(input_file)
+
 ws_entries = wb['ENTRIES']
 ws_labels  = wb['LABELS']
-
+ 
 all_entries_rows = list(ws_entries.rows)
 all_labels_rows = list(ws_labels.rows)
 
-# Populate entry_temp and entry_label_temp temporary table from ENTRIES sheet
+# Populate temporary tables entry_temp and entry_label_temp
+# from the rows in the ENTRIES sheet
+
+# Process each row from the ENTRIES sheet (all_entries_rows)
+# and insert the data into the temporary table entry_temp
+
+# NOTE: header row not processed - currently checking each row to see if it's the header - improve this!
 
 for row in all_entries_rows:
-    entry_val  = str(row[0].value)                            # value in ENTRY column
-    entry_prov_text = str(row[1].value)                       # value in PROVENANCE column
-    entry_labels = str(row[2].value)                          # value in LABELS column
+    entry_val  = str(row[0].value)                            # value from ENTRY column
+    entry_prov_text = str(row[1].value)                       # value from PROVENANCE column
+    entry_labels = str(row[2].value)                          # value from LABELS column
     if entry_prov_text != 'PROVENANCE':                       # ignore header row
-        entry_prov=entry_prov_text.split('","')[1].split('")')[0]   # get display val between '","' and '")'
+        # The provenance column contains a hyperlink and a display val
+        # Extract just the display val, i.e. the part between "," and ")
+        entry_prov=entry_prov_text.split('","')[1].split('")')[0]   
+        # The display val is a cell reference, e.g. C3. Split this into its alpha and numeric parts
         entry_prov_col=''.join(filter(str.isalpha, entry_prov))        # alpha part
         entry_prov_row=int(''.join(filter(str.isdigit, entry_prov)))   # numeric part
         insert_et="INSERT INTO entry_temp (entry_value, entry_provenance, entry_provenance_col, entry_provenance_row, entry_labels) \
                      VALUES ('"+entry_val+"', '"+entry_prov+"', '"+entry_prov_col+"', "+str(entry_prov_row)+", '"+entry_labels+"')"
         cur.execute(insert_et)
-        # split entry_labels (on comma) to get list of labels
+        # split entry_labels (on comma) to get list of labels for this entry
         entry_label_list = entry_labels.split(',')
         for entry_label in entry_label_list:
-            # get value found between square brackets as label_provenance
+            # label_provenance is the cell reference found between square brackets
             label_prov=entry_label.split('[')[1].split(']')[0]
-            insert_elt="INSERT INTO entry_label_temp (entry_provenance, label_provenance) \
-                        VALUES ('"+entry_prov+"', '"+label_prov+"')"
-            cur.execute(insert_elt)
+            # insert record into temp table entry_label_temp for this label
+            insert_stmt_elt="INSERT INTO entry_label_temp (entry_provenance, label_provenance) \
+                             VALUES ('"+entry_prov+"', '"+label_prov+"')"
+            cur.execute(insert_stmt_elt)
 
+# Populate table_cell based on contents of entry_temp
 
-# Populate table_cell based on entry_temp and source_table contents
+# The table_cell coordinates (left_col and top_row) represent the position of the cell within the table
+# The values are calculated from entry_provenance (the cell's position within the file) 
+# and tablestart, i.e. the position of the start of the table within the file
 
-    #   NB: we don't have right_col, bottom_row, cell_datatype info in the GT
-    #       right_col and bottom_row are inserted as duplicates of left_col and top_row
-
-    # left_col: ascii(entry_provenance_col)-ascii(tablestart_col)
-    #           (only works with up to 26 cols - need additional logic for AA, AB etc)
-    # top_row:  entry_provenance_row-tablestart_row
+#   NOTES: 
+#     i.  The GT doesn't contain right_col, bottom_row or cell_datatype
+#         right_col and bottom_row are therefore inserted as duplicates of left_col and top_row
+#         cell_datatype is left empty
+#     ii. calculation for left_col only works with up to 26 columns (cols A-Z)
+#         will need additional logic for tables containing cols AA, AB etc
 
 insert_stmt="INSERT INTO table_cell \
             (table_id, left_col, top_row, right_col, bottom_row, cell_content, cell_annotation) \
@@ -140,10 +150,9 @@ insert_stmt="INSERT INTO entry (entry_cell_id) \
              WHERE table_id="+str(table_id)+" AND cell_annotation='DATA'"
 cur.execute(insert_stmt)
 
-# Temporary commit (during testing)
-cur.execute('COMMIT;')
-
-# Populate label_temp temporary table from LABELS sheet
+# Process each row from the LABELS sheet (all_labels_rows)
+# and insert the data into the temporary table label_temp
+# NOTE: header row not processed - currently checking each row to see if it's the header - improve this!
 
 for row in all_labels_rows:
     label_val  = str(row[0].value)                             # value in LABEL column
@@ -151,26 +160,27 @@ for row in all_labels_rows:
     label_par  = str(row[2].value)                             # value in PARENT column
     label_cat  = str(row[3].value)                             # value in CATEGORY column
     if label_prov_text != 'PROVENANCE':                        # ignore header row
-        label_prov=label_prov_text.split('","')[1].split('")')[0]      # get display val between '","' and '")'
+        label_prov=label_prov_text.split('","')[1].split('")')[0]      # get display val between "," and ")
         label_prov_col=''.join(filter(str.isalpha, label_prov))        # alpha part
         label_prov_row=int(''.join(filter(str.isdigit, label_prov)))   # numeric part        
-        # print(label_par)
+        # If the label has no parent labels, insert a row containing information for just this label
         if label_par=='None':
             insert_stmt="INSERT INTO label_temp (label_value, label_provenance, label_provenance_col, label_provenance_row, label_category) \
                         VALUES ('"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_cat+"')"
+        # If the label has a parent, insert a row that includes provenance information for the parent label
         else:
             label_par_prov=label_par.split('[')[1].split(']')[0]           # get val between '[' and ']'
             insert_stmt="INSERT INTO label_temp (label_value, label_provenance, label_provenance_col, label_provenance_row, label_parent, label_category) \
                         VALUES ('"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_par_prov+"', '"+label_cat+"')"
         cur.execute(insert_stmt)
 
-insert_stmt="insert into category (category_name) select distinct label_category from label_temp"
-cur.execute(insert_stmt)
+# Populate the category table from the label_categories in label_temp
 
-# Temporary commit (during testing)
-cur.execute('COMMIT;')
+insert_stmt_cat="insert into category (category_name) select distinct label_category from label_temp"
+cur.execute(insert_stmt_cat)
 
 # Populate table_cell based on label_temp and source_table contents
+# The table_cell coordinates are calculated as for the table_cell rows corresponding to entries
 
 insert_stmt="INSERT INTO table_cell \
             (table_id, left_col, top_row, right_col, bottom_row, cell_content, cell_annotation) \
@@ -183,21 +193,7 @@ insert_stmt="INSERT INTO table_cell \
             FROM label_temp"
 cur.execute(insert_stmt)
 
-# Temporary commit (during testing)
-cur.execute('COMMIT;')
-
 # Populate label based on table_cell and label_temp
-#     need to add parent info
-
-# insert_stmt="INSERT INTO label (label_cell_id, category_name) \
-#              SELECT tcv.cell_id, lt.label_category \
-#              FROM tabby_cell_view tcv \
-#              JOIN label_temp lt \
-#              ON tcv.cell_provenance=lt.label_provenance  \
-#              WHERE tcv.table_id="+str(table_id)+" AND tcv.cell_annotation='HEADING'"
-# cur.execute(insert_stmt)
-
-# Temporarily dropped FK constraint: alter table label drop constraint fk_parent_label;
 
 insert_stmt="INSERT INTO label (label_cell_id, category_name, parent_label_cell_id) \
              SELECT tcv.cell_id, lt.label_category, tpcv.cell_id \
@@ -209,10 +205,6 @@ insert_stmt="INSERT INTO label (label_cell_id, category_name, parent_label_cell_
              WHERE tcv.table_id="+str(table_id)+" AND tcv.cell_annotation='HEADING'"
 cur.execute(insert_stmt)
 
-# Temporary commit (during testing)
-cur.execute('COMMIT;')
-
-
 # Populate entry_label from entry_label_temp and tabby_cell_view
 
 insert_el="INSERT INTO entry_label (entry_cell_id, label_cell_id) \
@@ -221,9 +213,6 @@ insert_el="INSERT INTO entry_label (entry_cell_id, label_cell_id) \
            JOIN tabby_cell_view e_cell ON elt.entry_provenance = e_cell.cell_provenance \
            JOIN tabby_cell_view l_cell ON elt.label_provenance = l_cell.cell_provenance"
 cur.execute(insert_el)
-
-# Temporary commit (during testing)
-cur.execute('COMMIT;')
 
 # Generate canonical_table_view and display contents
 
@@ -235,6 +224,11 @@ cur.execute(select_ctv)
 canonical_table = cur.fetchall()
 print(canonical_table)
 
-# Don't commit (at least during initial testing - will decide later whether or not data is to be kept)
+# Empty "temp" tables (NOT DOING THIS DURING TESTING)
+
+# truncate_stmt_temp="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
+# cur.execute(truncate_stmt_temp)
+
+# Commit changes to retain data input into tables (may or may not keep after test phase)
 cur.execute('COMMIT;')
 cur.close()
