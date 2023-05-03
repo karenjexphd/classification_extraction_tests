@@ -129,8 +129,10 @@ ALTER PROCEDURE create_tabby_canonical_table_view OWNER TO table_model;
 
 CREATE OR REPLACE VIEW pytheas_canonical_table_view
 AS
-SELECT st.table_id, st.file_name, st.table_number, tc.top_row AS table_row, (st.table_start::integer)+tc.top_row AS row_provenance, tc.cell_annotation
-FROM source_table st JOIN table_cell tc ON st.table_id = tc.table_id
+SELECT st.table_id, st.file_name, st.table_number, tc.top_row AS table_row, st.table_start_row+tc.top_row AS row_provenance, tc.cell_annotation
+FROM source_table st 
+JOIN table_cell tc 
+ON st.table_id = tc.table_id
 ORDER BY cell_annotation DESC;
 
 ALTER VIEW pytheas_canonical_table_view OWNER TO table_model;

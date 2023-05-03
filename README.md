@@ -11,18 +11,26 @@ The tools currently included are:
 
 ## Usage
 
-### Run table extraction for all available mathods against a single input file 
+### Set default parameters in config file
 
-DockerRuntimeTasks/DockerRuntimeTasks.sh [-p filepath] [-c csvfile] [-x xlsxfile] [-g ground_truth]"
+config/classification_extraction_tests.cfg
 
-* filepath:     path to input files (default value: /app/test_data/pytheas_demo_file)
-* csvfile:      name of input for Pytheas and Hypoparsr table extraction (default value: demo.csv)
-* xlsxfile:     name of (annotated) input for TabbyXL table extraction (default value: demo_a.xlsx)
-* ground_truth: name of file containing Pytheas ground truth (default value: demo.json)
+* list of methods
+* database connect strings
+* file locations
 
-e.g. run against tabbyXL demo file smpl.xlsx:
+The methods and file locations can be overwritten by providing input parameters to the scripts
 
-./DockerRuntimeTasks/DockerRuntimeTasks.sh -p /app/test_data/tabby_demo_file -c smpl.csv -x smpl.xlsx -g smpl.json 
+### Compare table extraction for all available methods against set of input files
+
+*** This script will eventually replace the DockerRUntimeTasks/RunExtractionTests.sh script **
+
+CompareExtractionMethods.sh [-p filepath] [-c csv_filepath] [-x xlsx_filepath] [-g gt_filepath]
+
+* filepath:      path to input files 
+* csv_filepath:  path to files for Pytheas and Hypoparsr table extraction (default: filepath/csv)
+* xlsx_filepath: path to (annotated) TabbyXL files; expects 1 file per csv file (default: filepath/xlsx)
+* gt_filepath:   path to ground truth files; expects 1 file per csv/xlsx file (default: filepath/gt)
 
 ### Run table extraction for all available methods against set of input files
 
@@ -34,6 +42,19 @@ DockerRuntimeTasks/RunExtractionTests.sh [-p filepath] [-c csv_filepath] [-x xls
 * csv_filepath:  path to files for Pytheas and Hypoparsr table extraction (default value: filepath/csv)
 * xlsx_filepath: path to (annotated) files for TabbyXL table extraction. Expects 1 file per file in csv_filepath (default value: filepath/xlsx)
 * gt_filepath:   path to files containing Pytheas ground truth. Expects 1 file per file in csv_filepath (default value: filepath/gt)
+
+### Run table extraction for all available mathods against a single input file
+
+DockerRuntimeTasks/DockerRuntimeTasks.sh [-p filepath] [-c csvfile] [-x xlsxfile] [-g ground_truth]"
+
+* filepath:     path to input files (default value: /app/test_data/pytheas_demo_file)
+* csvfile:      name of input for Pytheas and Hypoparsr table extraction (default value: demo.csv)
+* xlsxfile:     name of (annotated) input for TabbyXL table extraction (default value: demo_a.xlsx)
+* ground_truth: name of file containing Pytheas ground truth (default value: demo.json)
+
+e.g. run against tabbyXL demo file smpl.xlsx:
+
+./DockerRuntimeTasks/DockerRuntimeTasks.sh -p /app/test_data/tabby_demo_file -c smpl.csv -x smpl.xlsx -g smpl.json
 
 
 ## The following folders containing scripts/utilities have been created:

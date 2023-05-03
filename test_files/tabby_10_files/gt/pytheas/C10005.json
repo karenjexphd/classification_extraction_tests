@@ -2,15 +2,15 @@
          "blanklines": [],
          "tables": [{
                  "table_counter": 1,
-                 "top_boundary": 1,
-                 "bottom_boundary": 22,
-                 "data_start": 3,
-                 "data_end": 22,
+                 "top_boundary": 4,
+                 "bottom_boundary": 6,
+                 "data_start": 5,
+                 "data_end": 6,
                  "headnotes": [],
                  "header": [],
                  "subheaders": [],
-                 "data_indexes": [],
-                 "first_data_line": 3,
+                 "data_indexes": [5,6],
+                 "first_data_line": 5,
                  "not_data": [],
                  "footnotes": []
          }]

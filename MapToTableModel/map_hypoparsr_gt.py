@@ -8,25 +8,12 @@ from io import StringIO
 #   Display full & correct information for the processed table in canonical_table_view
 #   This can then be compared to the canonical_table_view extracted during the table extraction process
 
-# Tables to populate:
-
-# category                      <-- only 1 category for hypoparsr - ColumnHeading
-# entry                         <-- DATA rows from table_cell
-# entry_label     
-# entry_label_temp
-# entry_temp                    <-- data entries
-# label                         <-- HEADER rows from table_cell          
-# label_temp                    <-- column headings with category ColumnHeading
-# source_table                  <-- tablestart, filename, table_num
-# table_cell                    <-- HEADER and DATA entries relating to labels and entries
-
 # 1. Process input (Hypoparsr ground truth) file (<basename>.csv.feather)
 
-# input_file has been hardcoded during unit testing. 
-# Will be provided as input parameter during end-to-end tests:
+#sample input_file for testing
+#input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
 
-input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
-# input_file = str(sys.argv[1])       # Hypoparsr format GT file (<basename>.csv.feather)
+input_file = str(sys.argv[1])       # Hypoparsr format GT file (<basename>.csv.feather)
 
 #    Get base filename based on input_file path and name
 

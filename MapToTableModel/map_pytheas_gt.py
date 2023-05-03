@@ -2,31 +2,22 @@ import sys
 import psycopg2
 import json
 
-# Goal: extract information from given Pytheas ground truth file and map it to table model
-
-# Tables to populate:
-#    source_table  DONE
-#    table_cell    
-#    category      
-#    entry         
-#    label         
-#    entry_label   
-# Interim tables:
-#    entry_temp
-#    label_temp
-#    entry_label_temp
-# Goal:
-#    canonical_table_view displays full & correct information for the processed table
+# Goals:
+#   Extract information from given Pytheas ground truth file and map it to table model
+#   Display full & correct information for the processed table in the view canonical_table_view
+#   This can then be compared to the canonical_table_view extracted during the table extraction process
 
 # load JSON from GT file
 
-input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/pytheas/smpl.json"
+# input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/pytheas/smpl.json"
 
-# input_file has been hardcoded for testing. Will be provided as input parameter
-# input_file = str(sys.argv[1])       # Pytheas format GT file (<basename>.json)
+input_filepath = str(sys.argv[1])               # path to Pytheas format GT file
+input_filename = str(sys.argv[2])               # Name of Pytheas format GT file (<basename>.json)
+input_file = input_filepath+"/"+input_filename  # Fully qualified Pytheas format GT file
 
-# filename (will be identified from the input_file name)
-filename='smpl'
+# base filename
+filename=input_filename.split('.json')[0]
+print("base filename: "+filename)
 
 with open(input_file) as f:
   annotations = json.load(f)
@@ -58,7 +49,7 @@ for i in range(len(annotated)):
     tableend=table['bottom_boundary']
 
     # Insert into source_table (sheetnum will always be zero for Pytheas)
-    insert_stmt="INSERT INTO source_table (table_start, table_end, file_name, sheet_number, table_number) \
+    insert_stmt="INSERT INTO source_table (table_start_row, table_end_row, file_name, sheet_number, table_number) \
                  VALUES ('"+str(tablestart)+"', '"+str(tableend)+"', '"+filename+"', 0, "+str(tablenum)+")"
     cur.execute(insert_stmt)
 
@@ -75,6 +66,7 @@ for i in range(len(annotated)):
     entries=table['data_indexes']
 
     for entry in entries:
+        print("Insert entry into entry_temp: "+str(entry))
         insert_et="INSERT INTO entry_temp (entry_provenance_row) VALUES ("+str(entry)+")"
         cur.execute(insert_et)
 
