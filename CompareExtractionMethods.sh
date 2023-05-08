@@ -16,6 +16,9 @@
 # User performing tasks should be added to docker group:
 #    sudo usermod -a -G docker <username>
 
+# (Postgres) database exists, contains the table_model schema
+# and is configured in ./config/classification_extraction_tests.cfg
+
 #-----------------------------------------------------------------------#
 #                            -- TO DO --                                #
 #-----------------------------------------------------------------------#
@@ -136,8 +139,21 @@ done
 
 echo INFO: base filenames: $filenames
 
+#--- 1e. Drop and re-create table_model database
+
+$pg_conn_table_model -f tableModelDDL/00_drop_schema.sql
+
+$pg_conn_table_model -f tableModelDDL/01_create_schema.sql
+$pg_conn_table_model -f tableModelDDL/02_create_tables.sql
+$pg_conn_table_model -f tableModelDDL/03_create_constraints.sql
+$pg_conn_table_model -f tableModelDDL/04_create_views.sql
+$pg_conn_table_model -f tableModelDDL/05_create_temp_tables.sql
+$pg_conn_table_model -f tableModelDDL/06_create_procedures.sql
+
+# $pg_conn_table_model -c "TRUNCATE entry_label, label, entry, category, table_cell, source_table, entry_temp, label_temp, entry_label_temp"
+
 #-----------------------------------------------------------------------#
-#----- 2. Map ground truth to table model     TO DO                -----#
+#----- 2. Map ground truth to table model     WIP                  -----#
 #-----------------------------------------------------------------------#
 
 # for each method, process all gt files in gt_filepath/method

@@ -11,9 +11,9 @@ from io import StringIO
 # 1. Process input (Hypoparsr ground truth) file (<basename>.csv.feather)
 
 #sample input_file for testing
-#input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
+input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
 
-input_file = str(sys.argv[1])       # Hypoparsr format GT file (<basename>.csv.feather)
+#input_file = str(sys.argv[1])       # Hypoparsr format GT file (<basename>.csv.feather)
 
 #    Get base filename based on input_file path and name
 
@@ -23,7 +23,7 @@ filename=f[len(f)-1].split('.')[0]
 #    Get dataframe from input file
 
 df = feather.read_dataframe(input_file) 
-#print(df)
+print(df)
 
 # 2. Create connection to table_model database with search_path set to table_model
 

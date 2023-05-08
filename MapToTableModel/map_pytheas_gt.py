@@ -7,24 +7,26 @@ import json
 #   Display full & correct information for the processed table in the view canonical_table_view
 #   This can then be compared to the canonical_table_view extracted during the table extraction process
 
-# load JSON from GT file
+# 1. Process input (Pytheas ground truth) file (filename.json)
+#    Note that a Pytheas ground truth file may contain multiple tables
 
 # input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/pytheas/smpl.json"
-
+ 
 input_filepath = str(sys.argv[1])               # path to Pytheas format GT file
 input_filename = str(sys.argv[2])               # Name of Pytheas format GT file (<basename>.json)
 input_file = input_filepath+"/"+input_filename  # Fully qualified Pytheas format GT file
 
-# base filename
+# Get base filename based on input_file path and name
 filename=input_filename.split('.json')[0]
-print("base filename: "+filename)
+#print("processing base filename: "+filename)
 
 with open(input_file) as f:
   annotations = json.load(f)
 
 annotated = annotations['tables']
 
-# Connect to table_model database
+# 2. Create connection to table_model database with search_path set to table_model
+#    (Need to parameterise this)
 
 tm_conn = psycopg2.connect(
     host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
@@ -34,13 +36,7 @@ tm_conn = psycopg2.connect(
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
 
-# Create temp tables (temporarily created permanent tables in DB to allow them to be viewed from other sessions)
-
-#cur.execute('CREATE TEMPORARY TABLE entry_temp (entry_value text, entry_provenance text, entry_provenance_col text, entry_provenance_row integer, entry_labels text)')
-#cur.execute('CREATE TEMPORARY TABLE label_temp (label_value text, label_provenance text, label_provenance_col text, label_provenance_row integer, label_parent text, label_category text)')
-#cur.execute('CREATE TEMPORARY TABLE entry_label_temp (entry_provenance text, label_provenance text)')
-
-# process tables
+# 3. Process tables
 
 for i in range(len(annotated)):
     table=annotated[i]
@@ -125,8 +121,8 @@ for i in range(len(annotated)):
     canonical_table = cur.fetchall()
     print(canonical_table)
 
-    truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
-    cur.execute(truncate_et)
+    # truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
+    # cur.execute(truncate_et)
 
 cur.execute('COMMIT;')
 

@@ -5,6 +5,12 @@
 ALTER TABLE table_model.source_table
 ADD CONSTRAINT uk_source_table UNIQUE (file_name, sheet_number, table_number); 
 
+\echo Create constraints on category
+
+ALTER TABLE table_model.category
+ADD CONSTRAINT fk_source_table FOREIGN KEY (table_id)
+REFERENCES table_model.source_table(table_id);
+
 \echo Create constraints on table_cell
 
 ALTER TABLE table_model.table_cell

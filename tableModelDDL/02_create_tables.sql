@@ -61,13 +61,15 @@ COMMENT ON COLUMN table_model.table_cell.cell_annotation IS 'type of contents: n
 CREATE TABLE IF NOT EXISTS table_model.category
 (
   category_name text,
+  table_id integer,
   category_uri text,
-  PRIMARY KEY (category_name)
+  PRIMARY KEY (category_name, table_id)
 );
 
 ALTER TABLE table_model.category OWNER TO table_model;
 
 COMMENT ON TABLE table_model.category IS 'A column heading in the canonical table';
+COMMENT ON COLUMN table_model.category.table_id IS 'ID of the table to which this category belongs';
 COMMENT ON COLUMN table_model.category.category_uri IS 'uniform resource identifier representing this category in an external vocabulary';
 
 \echo Create table label

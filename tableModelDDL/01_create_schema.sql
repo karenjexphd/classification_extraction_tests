@@ -1,6 +1,6 @@
 \c postgres
-CREATE DATABASE table_model;
-CREATE ROLE table_model;
+--CREATE DATABASE table_model;
+--CREATE ROLE table_model;
 
 \c table_model
 CREATE SCHEMA table_model;
