@@ -1,5 +1,6 @@
 \echo Create "temp" tables in table_model schema - used during processing of input file
 
+
 \echo Create table entry_temp
 
 CREATE TABLE IF NOT EXISTS table_model.entry_temp 

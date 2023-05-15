@@ -3,53 +3,33 @@ import sys
 import psycopg2
 
 # Goals: 
-#   Extract information from given Tabby ground truth file and map it to table model
-#   Display full & correct information for the processed table in the view canonical_table_view
-#   This can then be compared to the canonical_table_view extracted during the table extraction process
+#   Extract information from given Tabby ground truth file or output file and map it to table model
+#   Note: a tabby GT or output file contains a single table
 
-# 1. Process input (Tabby ground truth) file (filename_<sheetnum>_<tablenum>.xlsx)
+# 1. Process input parameters:
 
-#    Note: a tabby GT file contains a single table
+#   i. input_filepath       path to file to be processed
+input_filepath = str(sys.argv[1])               
+#   ii. input_filename       name of file to be processed (<filename>[_sheetnum]_[tablenum].xlsx)
+input_filename = str(sys.argv[2])               
+#   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
+if str(sys.argv[3]) == 'TRUE':
+    is_gt=True
+else:
+    is_gt=False
 
-#    input_file has been hardcoded during unit testing. 
-#    Will be provided as input parameter during end-to-end tests:
+input_file = input_filepath+"/"+input_filename  # Fully qualified file
 
 #sample input_file for testing
 #input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/tabby/smpl_0_0.xlsx"
 #input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_10_files/gt/C10001.xlsx"
 
-input_filepath = str(sys.argv[1])               # path to TabbyXL format GT file
-input_filename = str(sys.argv[2])               # Name of TabbyXL format GT file (<filename>[_sheetnum]_[tablenum].xlsx)
-input_file = input_filepath+"/"+input_filename  # Fully qualified TabbyXL format GT file
-
 # Get base filename based on input_file path and name
 base_filename=input_filename.split('.xlsx')[0]
 
-#    Identify filename, sheet number and table number
-#    If len(base_filename.split('_')==3 ) then base_filename=filename_sheetnum_tablenum
-#    Else, sheetnum and tablenum are both 0
-
-if len(base_filename.split('_'))==3:
-    filename=base_filename.split('_')[0]
-    sheetnum=base_filename.split('_')[1]
-    tablenum=base_filename.split('_')[2]
-else:
-    filename=base_filename
-    sheetnum=0
-    tablenum=0    
-    
-#    table_start and table_end have been hardcoded during unit testing. 
-#    Will be provided as input parameter during end-to-end tests
-#    (will have been identified in a previous step from the original input_file):
-
-tablestart='A2'
-tableend='U12'
-
-tablestart_col=''.join(filter(str.isalpha, tablestart))        # alpha part, e.g. "A" from "A2"
-tablestart_row=int(''.join(filter(str.isdigit, tablestart)))   # numeric part, e.g. 12 from "U12"
-
-tableend_col=''.join(filter(str.isalpha, tableend))        # alpha part, e.g. "A" from "A2"
-tableend_row=int(''.join(filter(str.isdigit, tableend)))   # numeric part, e.g. 12 from "U12"
+filename= base_filename
+sheetnum=0
+tablenum=0    
 
 # 2. Create connection to table_model database with search_path set to table_model
 #    (Need to parameterise this)
@@ -62,20 +42,47 @@ tm_conn = psycopg2.connect(
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
 
-# Populate source_table
-# with a single row describing the table being processed
+# retrieve gt_table_id, tablestart_col and tablestart_row from source_table
 
-insert_stmt="INSERT INTO source_table (table_start_col, table_start_row, table_end_col, table_end_row, file_name, sheet_number, table_number) \
-             VALUES ('"+tablestart_col+"', "+str(tablestart_row)+", '"+tableend_col+"', "+str(tableend_row)+", '"+filename+"', "+str(sheetnum)+", "+str(tablenum)+")"
-cur.execute(insert_stmt)
-
-# retrieve (automatically generated) table_id from source_table
-
-select_stmt="SELECT table_id FROM source_table \
-             WHERE file_name='"+filename+"' AND sheet_number="+str(sheetnum)+" AND table_number="+str(tablenum)
+select_stmt="SELECT table_id, table_start_col, table_start_row, table_end_col, table_end_row \
+            FROM source_table \
+            WHERE table_is_gt=TRUE \
+            AND file_name='"+filename+"' AND sheet_number="+str(sheetnum)+" AND table_number="+str(tablenum)
 cur.execute(select_stmt)
-table_id = cur.fetchone()[0]
-print('table_id: '+str(table_id))
+
+table_info = cur.fetchone()
+
+gt_table_id    = table_info[0]
+tablestart_col = table_info[1]
+tablestart_row = table_info[2]
+tableend_col   = table_info[3]
+tableend_row   = table_info[4]
+
+if is_gt:
+
+    # If we're processing the ground truth file, just need to save gt_tble_id as table_id
+    table_id=gt_table_id
+
+else:       # we're processing the output file - need to populate source_table
+
+    insert_stmt="INSERT INTO source_table ( \
+                 table_is_gt, table_start_col, table_start_row, table_end_col, \
+                 table_end_row, file_name, sheet_number, table_number) \
+                 VALUES (FALSE,'"+tablestart_col+"', "+str(tablestart_row)+", '"+tableend_col+"', "+str(tableend_row)+", '"+filename+"', "+str(sheetnum)+", "+str(tablenum)+")"
+    cur.execute(insert_stmt)
+
+    # retrieve (automatically generated) table_id from source_table
+
+    select_stmt="SELECT table_id FROM source_table \
+                 WHERE table_is_gt=FALSE \
+                 AND file_name='"+filename+"' AND sheet_number="+str(sheetnum)+" AND table_number="+str(tablenum)
+    cur.execute(select_stmt)
+    
+    table_info = cur.fetchone() 
+
+    table_id = table_info[0]
+    print('table_id: '+str(table_id))
+
 
 # Use openpyxl load_workbook to load the input file as a workbook 
 # and get data from the required sheets (ENTRIES and LABELS):
@@ -233,7 +240,7 @@ insert_el="INSERT INTO entry_label (entry_cell_id, label_cell_id) \
            AND l_cell.table_id="+str(table_id)
 cur.execute(insert_el)
 
-# Generate canonical_table_<table_id> and display contents
+# Generate canonical_table_<table_id>
 
 create_ctv="CALL create_tabby_canonical_table("+str(table_id)+")"
 cur.execute(create_ctv)
@@ -241,7 +248,12 @@ cur.execute(create_ctv)
 select_ctv="SELECT * FROM tabby_canonical_table_"+str(table_id)
 cur.execute(select_ctv)
 canonical_table = cur.fetchall()
-print(canonical_table)
+# print(canonical_table)
+
+# Empty temp tables
+
+truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
+cur.execute(truncate_et)
 
 # Commit changes to retain data input into tables
 cur.execute('COMMIT;')

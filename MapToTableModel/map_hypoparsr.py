@@ -4,21 +4,25 @@ import feather
 from io import StringIO
 
 # Goals: 
-#   Extract information from given Hypoparsr ground truth file and map it to table model
-#   Display full & correct information for the processed table in canonical_table_view
-#   This can then be compared to the canonical_table_view extracted during the table extraction process
+#   Extract information from given Hypoparsr ground truth or extracted tables file and map it to table model
 
-# 1. Process input (Hypoparsr ground truth) file (<basename>.csv.feather)
+# 1. Process input parameters:
 
-#sample input_file for testing
-input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
+#   i. input_filepath       path to file to be processed
+input_filepath = str(sys.argv[1])  
+#   ii. input_filename       name of file to be processed (<basename>.csv.feather)
+input_filename = str(sys.argv[2])               
+#   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
+is_gt = str(sys.argv[3])
 
-#input_file = str(sys.argv[1])       # Hypoparsr format GT file (<basename>.csv.feather)
+input_file = input_filepath+"/"+input_filename  # Fully qualified file
+
+# sample input_file for testing
+# input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
 
 #    Get base filename based on input_file path and name
 
-f=input_file.split('/')
-filename=f[len(f)-1].split('.')[0]
+filename=input_filename.split('.csv.feather')[0]
 
 #    Get dataframe from input file
 
@@ -33,15 +37,6 @@ tm_conn = psycopg2.connect(
     user="postgres")
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
-
-
-# Create temporary input tables 
-# Have temporarily created as permanent tables in DB during testing
-# to allow them to be viewed after the script is run
-
-#cur.execute('CREATE TEMPORARY TABLE entry_temp (entry_value text, entry_provenance text, entry_provenance_col text, entry_provenance_row integer, entry_labels text)')
-#cur.execute('CREATE TEMPORARY TABLE label_temp (label_value text, label_provenance text, label_provenance_col text, label_provenance_row integer, label_parent text, label_category text)')
-#cur.execute('CREATE TEMPORARY TABLE entry_label_temp (entry_provenance text, label_provenance text)')
 
 # 3. Process table(s) in input (GT) file
 
@@ -58,8 +53,8 @@ tablestart_row=0
 # 3.1 Insert into source_table (sheetnum will always be zero for Hypoparsr, tableend isn't being populated for now)
 
 insert_stmt="INSERT INTO source_table \
-             (table_start_col, table_start_row, file_name, sheet_number, table_number) \
-             VALUES ('"+str(tablestart_col)+"', "+str(tablestart_row)+", '"+filename+"', "+str(sheet_num)+", "+str(table_num)+")"
+             (table_is_gt, table_start_col, table_start_row, file_name, sheet_number, table_number) \
+             VALUES ("+is_gt+",'"+str(tablestart_col)+"', "+str(tablestart_row)+", '"+filename+"', "+str(sheet_num)+", "+str(table_num)+")"
 cur.execute(insert_stmt)
 
 #    get table_id
@@ -170,10 +165,10 @@ cur.execute(select_ctv)
 canonical_table = cur.fetchall()
 print(canonical_table)
 
-# Empty temp tables (NOT DOING THIS DURING TESTING)
+# Empty temp tables
 
-# truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
-# cur.execute(truncate_et)
+truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
+cur.execute(truncate_et)
 
 # Commit changes to retain data input into tables
 cur.execute('COMMIT;')

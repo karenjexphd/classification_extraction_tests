@@ -3,7 +3,7 @@
 #-----------------------------------------------------------------------#
 
 # run call_tabby_extraction.sh against set of (annotated xlsx) input files
-# will generate basefilename_tabby_out.xls in $outputdir for each file
+# will generate basefilename.xls in $outputdir for each file
 
 outputdir=$1
 filepath=$2

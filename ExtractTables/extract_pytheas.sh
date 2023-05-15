@@ -3,7 +3,7 @@
 #-----------------------------------------------------------------------#
 
 # run pytheas_extract_tables.py against set of (csv) input files
-# will generate basefilename_pytheas_tables.json in $outputdir for each file
+# will generate basefilename.json in $outputdir for each file
 
 outputdir=$1
 filepath=$2

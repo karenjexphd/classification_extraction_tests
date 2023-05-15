@@ -25,7 +25,7 @@ do
          -input \$inputfile -ruleset tabbyxl/examples/rules/smpl.crl -output \$outputdir
     # copy created file $basefile_0_0.xlsx to $basefile_tabby_out.xlsx 
     # (assuming one sheet and one table per file)
-    mv \${outputdir}/\${basefile}_0_0.xlsx \${outputdir}/\${basefile}_tabby_out.xlsx
+    mv \${outputdir}/\${basefile}_0_0.xlsx \${outputdir}/\${basefile}.xlsx
   fi
 done
 EOF

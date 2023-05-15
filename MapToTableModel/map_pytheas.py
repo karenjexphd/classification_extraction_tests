@@ -3,18 +3,22 @@ import psycopg2
 import json
 
 # Goals:
-#   Extract information from given Pytheas ground truth file and map it to table model
-#   Display full & correct information for the processed table in the view canonical_table_view
-#   This can then be compared to the canonical_table_view extracted during the table extraction process
+#   Extract information from given Pytheas ground truth or table output file and map it to table model
 
-# 1. Process input (Pytheas ground truth) file (filename.json)
+# 1. Process input parameters:
+
+#   i. input_filepath       path to file to be processed
+input_filepath = str(sys.argv[1])  
+#   ii. input_filename       name of file to be processed (<basename>.json)
+input_filename = str(sys.argv[2])               
+#   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
+is_gt = str(sys.argv[3])
+
+input_file = input_filepath+"/"+input_filename  # Fully qualified file
+
 #    Note that a Pytheas ground truth file may contain multiple tables
 
 # input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/pytheas/smpl.json"
- 
-input_filepath = str(sys.argv[1])               # path to Pytheas format GT file
-input_filename = str(sys.argv[2])               # Name of Pytheas format GT file (<basename>.json)
-input_file = input_filepath+"/"+input_filename  # Fully qualified Pytheas format GT file
 
 # Get base filename based on input_file path and name
 filename=input_filename.split('.json')[0]
@@ -45,8 +49,8 @@ for i in range(len(annotated)):
     tableend=table['bottom_boundary']
 
     # Insert into source_table (sheetnum will always be zero for Pytheas)
-    insert_stmt="INSERT INTO source_table (table_start_row, table_end_row, file_name, sheet_number, table_number) \
-                 VALUES ('"+str(tablestart)+"', '"+str(tableend)+"', '"+filename+"', 0, "+str(tablenum)+")"
+    insert_stmt="INSERT INTO source_table (table_is_gt, table_start_row, table_end_row, file_name, sheet_number, table_number) \
+                 VALUES ("+is_gt+",'"+str(tablestart)+"', '"+str(tableend)+"', '"+filename+"', 0, "+str(tablenum)+")"
     cur.execute(insert_stmt)
 
     # get table_id
@@ -121,8 +125,8 @@ for i in range(len(annotated)):
     canonical_table = cur.fetchall()
     print(canonical_table)
 
-    # truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
-    # cur.execute(truncate_et)
+    truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
+    cur.execute(truncate_et)
 
 cur.execute('COMMIT;')
 

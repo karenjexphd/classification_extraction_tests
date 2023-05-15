@@ -62,7 +62,7 @@ do
   if [[ \$file == *.csv ]]
   then
     basefile=\$(basename \$file .csv)
-    outputfile=\${outputdir}/\${basefile}_pytheas_tables.json
+    outputfile=\${outputdir}/\${basefile}.json
     python3 pytheas_extract_tables.py \$inputdir \$file > \$outputfile
   fi
 done

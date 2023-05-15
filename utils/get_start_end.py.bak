@@ -1,0 +1,38 @@
+from openpyxl import load_workbook
+import sys 
+
+# Goals: 
+#   Extract $START and $END cell ids from given sheet of TabbyXL input file
+
+# 1. Process input parameters:
+
+#   i. input_filepath       path to file to be processed
+input_filepath = str(sys.argv[1])               
+#   ii. input_filename       name of file to be processed (<filename>[_sheetnum]_[tablenum].xlsx)
+input_filename = str(sys.argv[2])               
+#   iii. sheet_num          will always be first sheet for now
+sheet_num=0
+
+input_file = input_filepath+"/"+input_filename  # Fully qualified file
+
+print("input_file: "+input_file)
+# Get base filename based on input_file path and name
+base_filename=input_filename.split('.xlsx')[0]
+
+# Use openpyxl load_workbook to load the input file as a workbook (wb)
+# and get data from the required sheet as a worksheet (ws):
+
+wb = load_workbook(input_file)
+sheets=wb.sheetnames
+ws=wb[sheets[sheet_num]]
+ 
+all_rows = list(ws.rows)
+for row in all_rows:
+    for cell in row:
+        if cell.value == "$START":
+            table_start=cell.coordinate
+        elif cell.value == "$END":
+            table_end=cell.coordinate
+
+print("Table Start: "+table_start)
+print("Table End: "+table_end)

@@ -3,46 +3,69 @@
 #-----------------------------------------------------------------------#
 # Main script for framework to perform end to end comparison            #
 # of table extraction methods against each others' data sets            #
-# Methods currently compared: Pytheas, Hypoparsr, TabbyXL               #
+# Methods currently available: Pytheas, Hypoparsr, TabbyXL              #
 #-----------------------------------------------------------------------#
 
 #-----------------------------------------------------------------------#
 #                         -- Prerequisites --                           #
 #-----------------------------------------------------------------------#
 
-# Docker images docker-pytheas, docker-hypoparsr and docker-tabby
-# have been created and pushed to Docker Hub
+# 1.DOCKER IMAGES
+ 
+# Docker images have been created and pushed to Docker Hub:
+# docker-pytheas, docker-hypoparsr and docker-tabby
+
+# 2. DOCKER GROUP
 
 # User performing tasks should be added to docker group:
 #    sudo usermod -a -G docker <username>
 
-# (Postgres) database exists, contains the table_model schema
+# 3. TABLE MODEL DATABASE
+
+# (Postgres) database exists, is up and running
 # and is configured in ./config/classification_extraction_tests.cfg
 
 #-----------------------------------------------------------------------#
 #                            -- TO DO --                                #
 #-----------------------------------------------------------------------#
 
-# use for-loop to evaluate each of the methods
+# 1. CONTAINERS CLEANUP
 
-# remove previous containers only if cleanup_containers=Y and containers exist
+# create a cleanup_containers flag
+# remove previous containers only if cleanup_containers=Y 
+# check that containers exist before attempting to delete
+# only delete relevant containers
+
+# 2. OUTPUTDIR CLEANUP
+
+# create a cleanup_outputdirs flag
 # remove previous output directories only if cleanup_outputdirs=Y
 
-# print messages only if verbose mode chosen
+# 3. VERBOSE MODE
+
+# print information (INFO) messages only if verbose mode chosen
+
+# 4. ADDITIONAL METHODS
+
+# write instructions for adding another method
 
 #-----------------------------------------------------------------------#
 #                   -- Process Input Parameters --                      #
 #-----------------------------------------------------------------------#
 
-# apply defaults from classification_extraction_tests.cfg config file
-# these may be overwritten by the input parameters provided to the script
+# first apply defaults from conf file classification_extraction_tests.cfg 
 
 source ./config/classification_extraction_tests.cfg
 
-while getopts 'm:p:h' OPTION; do
+# next process input parameters (may overwrite parameters in conf file)
+
+while getopts 'm:d:p:h' OPTION; do
     case "$OPTION" in 
         m)
           methods="$OPTARG"
+          ;;
+        d)
+          dataset_method="$OPTARG"
           ;;
         p)
           filepath="$OPTARG"
@@ -51,8 +74,8 @@ while getopts 'm:p:h' OPTION; do
           echo "script usage: $0 [-m methods] [-p filepath]"
           echo "-m   methods:       list of methods to evaluate (double-quoted, blank space-separated list)"
           echo
+          echo "-d   dataset_method: the name of the method associated with the available ground truth files"
           echo "-p   filepath:      path to input files."
-          echo "                    default value: /app/test_data/tabby_10_files"
           echo "                    Expected structure: filepath/csv filepath/xlsx filepath/gt"
           echo
           exit 0
@@ -64,13 +87,16 @@ while getopts 'm:p:h' OPTION; do
     esac
 done
 
-csv_filepath=$filepath/csv       # path to input files for Pytheas and Hypoparsr"
-xlsx_filepath=$filepath/xlsx     # path to (annotated) input files for TabbyXL. Expects 1 per file in csv_filepath"
-gt_filepath=$filepath/gt         # path to files containing associated ground truth"
+# set csv_filepath, xlsx_filepath and gt_filepath relative to filepath provided
+
+csv_filepath=$filepath/csv       # path to input files for Pytheas and Hypoparsr
+xlsx_filepath=$filepath/xlsx     # path to (annotated) input files for TabbyXL. Expects 1 per file in csv_filepath
+gt_filepath=$filepath/gt         # path to files containing associated ground truth
 
 #  Note: Required directories will be mounted to the containers at runtime
 
 echo "INFO: Methods to be processed: " $methods
+echo "INFO: Ground truth belongs to method: " $dataset_method
 echo "INFO: root input file path: " $filepath
 echo "INFO: csv input file path: " $csv_filepath
 echo "INFO: xlsx input file path: " $xlsx_filepath
@@ -82,10 +108,10 @@ echo "INFO: ground truth file path: " $gt_filepath
 
 # Tasks:
 # 1. Clean up from previous tests and setup for current test - DONE
-# 2. Map GT to table model 
+# 2. Map GT to table model <-- NOTE - THIS STEP WILL DEPEND ON THE GT FORMAT
 # 3. Run table extractions - DONE
-# 4. Map output to table model 
-# 5. Evaluate extraction by comparing GT and output 
+# 4. Map output to table model <-- THIS STEP TO BE DONE FOR EACH METHOD
+# 5. Evaluate extraction by comparing GT and output in table model
 # 6. Display metrics to compare the methods 
 
 #-----------------------------------------------------------------------#
@@ -106,8 +132,14 @@ echo INFO: Output will be written to $outputdir
 #----- 1b. Remove previous containers (just certain containers?)   -----#
 
 echo
-echo INFO: Removing previous containers...
-docker rm -f `docker ps -aq`
+echo INFO: Removing previous containers... 
+
+#docker rm -f `docker ps -aq`
+
+for container in $(docker ps -aq)
+do
+  docker rm -f $container
+done
 
 #----- 1c. Create outputdir                                        -----#
 
@@ -153,37 +185,41 @@ $pg_conn_table_model -f tableModelDDL/06_create_procedures.sql
 # $pg_conn_table_model -c "TRUNCATE entry_label, label, entry, category, table_cell, source_table, entry_temp, label_temp, entry_label_temp"
 
 #-----------------------------------------------------------------------#
-#----- 2. Map ground truth to table model     WIP                  -----#
+#----- 2. Map ground truth to table model                          -----#
 #-----------------------------------------------------------------------#
 
-# for each method, process all gt files in gt_filepath/method
+# NB Mapping only needs to be done for the model the dataset belongs to
+# NB Currently only fully done for TabbyXL data
 
-for method in $methods
+# Get address of $START and $END cells if this is a TabbyXL dataset 
+
+if [[ $dataset_method == tabbyxl ]]
+then
+  input_file_path=$xlsx_filepath
+  python3 ./utils/get_start_end.py $xlsx_filepath
+fi
+
+# Call map_${dataset_method}.py passing TRUE for "is_gt"
+# NB Currently not using the is_gt switch in the script - is it needed?
+
+echo INFO: Mapping $dataset_method ground truth to table model
+for file in $(ls $gt_filepath)
 do
-  echo
-  echo INFO: Mapping $method ground truth to table model
-  method_gt_filepath=${gt_filepath}/${method}
-  echo INFO: method_gt_filepath: $method_gt_filepath
-  for file in $(ls $method_gt_filepath)
-  do
-    echo INFO: Processing file ${method_gt_filepath}/${file}
-    python3 ./MapToTableModel/map_${method}_gt.py $method_gt_filepath $file
-  done
+  echo INFO: Processing file ${gt_filepath}/${file}
+  python3 ./MapToTableModel/map_${dataset_method}.py $gt_filepath $file TRUE
 done
 
-
-exit
-
-
 #-----------------------------------------------------------------------#
-#----- 3. Run table extractions           COMPLETE                 -----#
+#----- 3. Run table extractions                                    -----#
 #-----------------------------------------------------------------------#
 
 for method in $methods
 do
   echo
   echo INFO: Extracting tables using $method method
-  ./ExtractTables/extract_${method}.sh $outputdir $filepath
+  outputfiledir=${outputdir}/${method}
+  mkdir $outputfiledir
+  ./ExtractTables/extract_${method}.sh $outputfiledir $filepath
 done
 
 #-----------------------------------------------------------------------#
@@ -192,70 +228,44 @@ done
 
 for method in $methods
 do
+  outputfiledir=${outputdir}/${method}
   echo
-  echo INFO: Mapping $method ground truth to table model 
-  method_gt_filepath=${gt_filepath}/${method}
-  echo INFO: method_gt_filepath: $method_gt_filepath
-#  for file in $(ls $method_gt_filepath)
-#  do
-#    echo INFO: Processing file $file
-#    python3 map_${method}_gt.py $file
-#  done
+  echo INFO: Mapping $method extracted tables to table model 
+  for file in $(ls $outputfiledir)
+  do
+    echo INFO: Processing extracted file ${outputfiledir}/${file}
+    python3 ./MapToTableModel/map_${method}.py $outputfiledir $file FALSE
+  done
 done
 
-
-
-exit
-
-
-
-### *** REMAINDER OF SCRIPT IS DIRECTLY COPIED FROM PREVIOUS VERSION - NOT TO BE USED AS-IS *** ###
-
-# 4. Perform Pytheas evaluation on TabbyXL, Hypoparsr and Pytheas table extraction output
-
-#    Parameters for pytheas_evaluate.py script:
-#       1 (input): Ground truth file
-#       2 (input): discovered tables from associated table extraction 
-#       3 (output): <method>_confusion.out
-#       4 (output): <method>_confidences.out
+#-----------------------------------------------------------------------#
+#----- 5. Evaluate output (compare with table model)               -----#
+#-----------------------------------------------------------------------#
 
 for method in $methods
 do
   echo
-  echo INFO: Evaluating output for $method method
-  echo INFO: Ground truth dir is $gt_filepath
-
-#  tables_file=outputdir/${method}_tables.json
-#  confusion_file=outputdir/${method}_confusion.out
-#  confidences_file=outputdir/${method}_confidences.out
-
-  # Run the pytheas evaluate script on each of the _method_tables.json files in outputdir
-
-  docker run --mount type=bind,source=$outputdir,target=/app/outputdir \
-   --mount type=bind,source=$gt_filepath,target=/app/gtdir,readonly \
-           -i karenjexphd/table_extraction_tests:docker-pytheas \
-             bash -c "./pytheas_evaluate_tables.sh gtdir outputdir $method"
-
+  echo INFO: Evaluating tables extracted by $method 
+  # execute relevant script in EvaluateOutput
+  # to compare GT against extracted tables in table_model 
+  # should generate confusion matrix
 done
 
-# 5. Compare evaluation output for Pytheas, Hypoparsr and TabbyXL
+#-----------------------------------------------------------------------#
+#----- 6. Display Graph(s)                                         -----#                
+#-----------------------------------------------------------------------#
 
-# compare contents of $outputdir/*_confusion.out files 
-#   for each method in $methods
-#   and for each file in filenames
+for method in $methods
+do
+  echo
+  echo INFO: Displaying results for $method
+  # execute relevant script in DisplayResults
+done
 
-# ** NEED SHELL SCRIPT TO GO THROUGH ALL FILES (ADD TO DOCKER IMAGE) **
+# Display results that compare the methods
 
-docker run --mount type=bind,source=$outputdir,target=/app/outputdir \
-             -i karenjexphd/table_extraction_tests:docker-pytheas \
-             bash -c "python3 pytheas_compare.py \"$methods\" \"$filenames\" outputdir > outputdir/confusion_matrix_comparison.out"
+# --------------------------------------------------------------------- #
 
-echo
-echo INFO: Comparison of table extraction evaluation for each method:
-echo
-cat $outputdir/confusion_matrix_comparison.out
-
-echo
 echo
 echo INFO: Tests complete: `date`
 echo INFO: Output written to $outputdir

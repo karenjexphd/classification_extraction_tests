@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS table_model.source_table
   file_name text,
   sheet_number integer,
   table_number integer,
+  table_is_gt  boolean DEFAULT FALSE,
   table_start_col text,
   table_start_row integer,
   table_end_col text,
@@ -26,6 +27,7 @@ COMMENT ON COLUMN table_model.source_table.table_start_col IS 'position of colum
 COMMENT ON COLUMN table_model.source_table.table_start_row IS 'position of row directly above table. Row 0 within table';
 COMMENT ON COLUMN table_model.source_table.table_end_col IS 'position of column directly to right of table.';
 COMMENT ON COLUMN table_model.source_table.table_end_row IS 'position of row directly below table.';
+COMMENT ON COLUMN table_model.source_table.table_is_gt IS 'TRUE if this row represents the ground truth for the table';
 
 \echo Create table table_cell
 
