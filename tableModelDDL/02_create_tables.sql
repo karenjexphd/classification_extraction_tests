@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS table_model.source_table
   sheet_number integer,
   table_number integer,
   table_is_gt  boolean DEFAULT FALSE,
+  table_method text,
   table_start_col text,
   table_start_row integer,
   table_end_col text,
@@ -28,6 +29,7 @@ COMMENT ON COLUMN table_model.source_table.table_start_row IS 'position of row d
 COMMENT ON COLUMN table_model.source_table.table_end_col IS 'position of column directly to right of table.';
 COMMENT ON COLUMN table_model.source_table.table_end_row IS 'position of row directly below table.';
 COMMENT ON COLUMN table_model.source_table.table_is_gt IS 'TRUE if this row represents the ground truth for the table';
+COMMENT ON COLUMN table_model.source_table.table_method IS 'name of the method used to extract the table, or if table_is_gt is TRUE, the method associated with the data set';
 
 \echo Create table table_cell
 

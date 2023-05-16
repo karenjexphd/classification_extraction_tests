@@ -121,3 +121,146 @@ ORDER BY 1, 2, 3, 5, 4;
 
 ALTER VIEW hypoparsr_canonical_table_view OWNER TO table_model;
 
+
+-- CREATE EVALUATION VIEWS
+
+-- tables_to_compare
+-- ground truth table_id and matching (based on file_name, sheet_number and table_number) output table for each method
+
+CREATE OR REPLACE VIEW tables_to_compare
+AS
+WITH gt_tables AS (
+    SELECT table_id, 
+    file_name||'_'||sheet_number||'_'||table_number AS table_name 
+    FROM source_table 
+    WHERE table_is_gt),
+    output_tables AS (
+    SELECT table_id, 
+    table_method,
+    file_name||'_'||sheet_number||'_'||table_number AS table_name 
+    FROM source_table 
+    WHERE NOT table_is_gt)
+SELECT gt.table_id AS gt_table_id,
+       ot.table_id AS output_table_id,
+       gt.table_name,
+       ot.table_method 
+FROM gt_tables gt
+JOIN output_tables ot
+ON gt.table_name = ot.table_name
+ORDER BY gt.table_id;
+
+ALTER VIEW tables_to_compare OWNER TO table_model;
+
+-- gt_label_set and output_label_set
+-- both based on tables_to_compare view
+
+CREATE OR REPLACE VIEW gt_label_set 
+AS
+SELECT t2c.table_name, tc.left_col, tc.top_row, category_name, cell_content as label
+FROM tables_to_compare t2c 
+JOIN table_cell tc
+ON t2c.gt_table_id=tc.table_id
+JOIN label l 
+ON l.label_cell_id=tc.cell_id;
+
+ALTER VIEW gt_label_set OWNER TO table_model;
+
+CREATE OR REPLACE VIEW output_label_set
+AS
+SELECT t2c.table_name, t2c.table_method, tc.left_col, tc.top_row, category_name, cell_content as label
+FROM tables_to_compare t2c 
+JOIN table_cell tc
+ON t2c.output_table_id=tc.table_id
+JOIN label l 
+ON l.label_cell_id=tc.cell_id;
+
+ALTER VIEW output_label_set OWNER TO table_model;
+
+-- gt_entry_set and output_entry_set
+-- both based on tables_to_compare view
+
+CREATE OR REPLACE VIEW gt_entry_set
+AS
+SELECT t2c.table_name, tc.left_col, tc.top_row, cell_content as entry 
+FROM tables_to_compare t2c
+JOIN table_cell tc
+ON t2c.gt_table_id=tc.table_id
+JOIN entry e
+ON e.entry_cell_id=tc.cell_id;
+
+ALTER VIEW gt_entry_set OWNER TO table_model;
+
+CREATE OR REPLACE VIEW output_entry_set
+AS
+SELECT t2c.table_name, t2c.table_method, tc.left_col, tc.top_row, cell_content as entry
+FROM tables_to_compare t2c
+JOIN table_cell tc
+ON t2c.output_table_id=tc.table_id
+JOIN entry e
+ON e.entry_cell_id=tc.cell_id;
+
+ALTER VIEW output_entry_set OWNER TO table_model;
+
+-- Create entry_confusion view: confusion matrix for the set of entries per table and per model
+
+CREATE OR REPLACE VIEW entry_confusion AS
+WITH gtec AS
+(select table_name, count(*) AS gt_entry_count
+FROM gt_entry_set
+GROUP BY table_name),
+oec AS
+(select table_name, table_method, count(*) AS output_entry_count
+FROM output_entry_set
+GROUP BY table_name, table_method),
+etp AS
+(SELECT oe.table_name, oe.table_method, count(*) AS entry_true_pos
+FROM gt_entry_set gte
+JOIN output_entry_set oe
+ON gte.table_name=oe.table_name
+AND gte.left_col=oe.left_col
+AND gte.top_row=oe.top_row
+AND gte.entry=oe.entry
+group by oe.table_name, oe.table_method)
+SELECT gtec.table_name,
+       oec.table_method as method_name, 
+       gtec.gt_entry_count AS gt_total_entries,
+       oec.output_entry_count AS output_total_entries,
+       oec.output_entry_count-etp.entry_true_pos AS entry_false_pos, 
+       gtec.gt_entry_count-etp.entry_true_pos AS entry_false_neg, 
+       etp.entry_true_pos
+FROM gtec JOIN oec ON gtec.table_name=oec.table_name
+JOIN etp ON oec.table_name=etp.table_name AND oec.table_method=etp.table_method;
+
+ALTER VIEW entry_confusion OWNER TO table_model;
+
+
+CREATE OR REPLACE VIEW label_confusion AS
+WITH gtlc AS
+(select table_name, count(*) AS gt_label_count
+FROM gt_label_set
+GROUP BY table_name),
+olc AS
+(select table_name, table_method, count(*) AS output_label_count
+FROM output_entry_set
+GROUP BY table_name, table_method),
+ltp AS
+(SELECT ol.table_name, ol.table_method, count(*) AS label_true_pos
+FROM gt_label_set gtl
+JOIN output_label_set ol
+ON gtl.table_name=ol.table_name
+AND gtl.left_col=ol.left_col
+AND gtl.top_row=ol.top_row
+AND gtl.label=ol.label
+--AND gtl.category_name=ol.category_name
+group by ol.table_name, ol.table_method)
+SELECT gtlc.table_name,
+       olc.table_method as method_name, 
+       gtlc.gt_label_count AS gt_total_labels,
+       olc.output_label_count AS output_total_labels,
+       olc.output_label_count-ltp.label_true_pos AS label_false_pos, 
+       gtlc.gt_label_count-ltp.label_true_pos AS label_false_neg, 
+       ltp.label_true_pos
+FROM gtlc JOIN olc ON gtlc.table_name=olc.table_name
+JOIN ltp ON olc.table_name=ltp.table_name AND olc.table_method=ltp.table_method;
+
+ALTER VIEW label_confusion OWNER TO table_model;

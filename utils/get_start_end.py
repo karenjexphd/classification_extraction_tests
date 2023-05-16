@@ -62,6 +62,7 @@ for file in os.listdir(input_filepath):
 
     insert_stmt="INSERT INTO source_table ( \
                 table_is_gt, \
+                table_method, \
                 table_start_col, \
                 table_start_row, \
                 table_end_col, \
@@ -70,6 +71,7 @@ for file in os.listdir(input_filepath):
                 sheet_number, \
                 table_number) \
                 VALUES (TRUE, \
+                        'tabbyxl', \
                         '"+tablestart_col+"', \
                         "+str(tablestart_row)+", \
                         '"+tableend_col+"', \

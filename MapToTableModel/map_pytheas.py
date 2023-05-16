@@ -12,7 +12,10 @@ input_filepath = str(sys.argv[1])
 #   ii. input_filename       name of file to be processed (<basename>.json)
 input_filename = str(sys.argv[2])               
 #   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
-is_gt = str(sys.argv[3])
+if str(sys.argv[3]) == 'TRUE':
+    is_gt=True
+else:
+    is_gt=False
 
 input_file = input_filepath+"/"+input_filename  # Fully qualified file
 

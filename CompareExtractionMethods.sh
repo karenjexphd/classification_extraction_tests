@@ -246,6 +246,7 @@ for method in $methods
 do
   echo
   echo INFO: Evaluating tables extracted by $method 
+  python3  ./EvaluateOutput/evaluate_${method}.py 
   # execute relevant script in EvaluateOutput
   # to compare GT against extracted tables in table_model 
   # should generate confusion matrix

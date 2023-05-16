@@ -44,10 +44,16 @@ cur.execute('SET SEARCH_PATH=table_model')
 
 # retrieve gt_table_id, tablestart_col and tablestart_row from source_table
 
-select_stmt="SELECT table_id, table_start_col, table_start_row, table_end_col, table_end_row \
+select_stmt="SELECT table_id, \
+                    table_start_col, \
+                    table_start_row, \
+                    table_end_col, \
+                    table_end_row \
             FROM source_table \
             WHERE table_is_gt=TRUE \
-            AND file_name='"+filename+"' AND sheet_number="+str(sheetnum)+" AND table_number="+str(tablenum)
+            AND file_name='"+filename+"' \
+            AND sheet_number="+str(sheetnum)+" \
+            AND table_number="+str(tablenum)
 cur.execute(select_stmt)
 
 table_info = cur.fetchone()
@@ -66,16 +72,35 @@ if is_gt:
 else:       # we're processing the output file - need to populate source_table
 
     insert_stmt="INSERT INTO source_table ( \
-                 table_is_gt, table_start_col, table_start_row, table_end_col, \
-                 table_end_row, file_name, sheet_number, table_number) \
-                 VALUES (FALSE,'"+tablestart_col+"', "+str(tablestart_row)+", '"+tableend_col+"', "+str(tableend_row)+", '"+filename+"', "+str(sheetnum)+", "+str(tablenum)+")"
+                    table_is_gt, \
+                    table_method, \
+                    table_start_col, \
+                    table_start_row, \
+                    table_end_col, \
+                    table_end_row, \
+                    file_name, \
+                    sheet_number, \
+                    table_number) \
+                VALUES ( \
+                    FALSE, \
+                    'tabbyxl', \
+                    '"+tablestart_col+"', \
+                    "+str(tablestart_row)+", \
+                    '"+tableend_col+"', \
+                    "+str(tableend_row)+", \
+                    '"+filename+"', \
+                    "+str(sheetnum)+", \
+                    "+str(tablenum)+")"
     cur.execute(insert_stmt)
 
     # retrieve (automatically generated) table_id from source_table
 
     select_stmt="SELECT table_id FROM source_table \
-                 WHERE table_is_gt=FALSE \
-                 AND file_name='"+filename+"' AND sheet_number="+str(sheetnum)+" AND table_number="+str(tablenum)
+                WHERE table_is_gt=FALSE \
+                AND table_method='tabbyxl' \
+                AND file_name='"+filename+"' \
+                AND sheet_number="+str(sheetnum)+" \
+                AND table_number="+str(tablenum)
     cur.execute(select_stmt)
     
     table_info = cur.fetchone() 
@@ -120,8 +145,17 @@ for row in all_entries_rows:
         # insert_et="INSERT INTO entry_temp (entry_value, entry_provenance, entry_provenance_col, entry_provenance_row, entry_labels) \
         #              VALUES ('"+entry_val+"', '"+entry_prov+"', '"+entry_prov_col+"', "+str(entry_prov_row)+", '"+entry_labels+"')"
 
-        insert_et="INSERT INTO entry_temp (table_id, entry_value, entry_provenance, entry_provenance_col, entry_provenance_row) \
-                     VALUES ("+str(table_id)+",'"+entry_val+"', '"+entry_prov+"', '"+entry_prov_col+"', "+str(entry_prov_row)+")"
+        insert_et="INSERT INTO entry_temp (\
+                    table_id, \
+                    entry_value, \
+                    entry_provenance, \
+                    entry_provenance_col, \
+                    entry_provenance_row) \
+                    VALUES ("+str(table_id)+", \
+                    '"+entry_val+"', \
+                    '"+entry_prov+"', \
+                    '"+entry_prov_col+"', \
+                    "+str(entry_prov_row)+")"
         cur.execute(insert_et)
         # split entry_labels (on comma) to get list of labels for this entry
         entry_label_list = entry_labels.split('", "')
@@ -147,8 +181,14 @@ for row in all_entries_rows:
 #     ii. calculation for left_col only works with up to 26 columns (cols A-Z)
 #         will need additional logic for tables containing cols AA, AB etc
 
-insert_stmt="INSERT INTO table_cell \
-            (table_id, left_col, top_row, right_col, bottom_row, cell_content, cell_annotation) \
+insert_stmt="INSERT INTO table_cell (\
+                    table_id, \
+                    left_col, \
+                    top_row, \
+                    right_col, \
+                    bottom_row, \
+                    cell_content, \
+                    cell_annotation) \
             SELECT  "+str(table_id)+", \
                     ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
                     entry_provenance_row-"+str(tablestart_row)+", \
