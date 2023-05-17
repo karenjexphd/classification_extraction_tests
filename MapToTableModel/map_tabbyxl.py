@@ -58,6 +58,9 @@ cur.execute(select_stmt)
 
 table_info = cur.fetchone()
 
+# print('Table Info:')
+# print(table_info)
+
 gt_table_id    = table_info[0]
 tablestart_col = table_info[1]
 tablestart_row = table_info[2]

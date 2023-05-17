@@ -1,4 +1,4 @@
--- CREATE VIEWS FOR TABBYXL
+-- 1. CREATE VIEWS SPECIFIC TO TABBYXL CANONICAL FORM
 
 \echo Create view tabby_cell_view
 \echo Uses table_start to convert cell addresses to physical location in input file
@@ -17,7 +17,6 @@ JOIN source_table st
 ON   tc.table_id = st.table_id;
 
 ALTER VIEW tabby_cell_view OWNER TO table_model;
-
 
 \echo Create view tabby_entry_view
 
@@ -86,7 +85,9 @@ ON   el.label_cell_id = label_cell.cell_id;
 
 ALTER VIEW tabby_entry_label_view OWNER TO table_model;
 
--- CREATE VIEWS FOR PYTHEAS
+-- 2. CREATE VIEWS SPECIFIC TO PYTHEAS CANONICAL FORM
+
+\echo Create pytheas_canonical_table_view
 
 CREATE OR REPLACE VIEW pytheas_canonical_table_view
 AS
@@ -98,7 +99,7 @@ ORDER BY cell_annotation DESC;
 
 ALTER VIEW pytheas_canonical_table_view OWNER TO table_model;
 
--- CREATE VIEWS FOR HYPOPARSR
+-- 3. CREATE VIEWS SPECIFIC TO HYPOPARSR CANONICAL FORM
 
 -- TO DO: REPLACE table_row WITH ID OF ROW IN DATAFRAME (ie DELETE max(top_row) WHERE cell_annotation='HEADING')
 CREATE OR REPLACE VIEW hypoparsr_canonical_table_view
@@ -121,11 +122,15 @@ ORDER BY 1, 2, 3, 5, 4;
 
 ALTER VIEW hypoparsr_canonical_table_view OWNER TO table_model;
 
+-- 4. CREATE VIEWS TO SUPPORT EVALUATION
 
--- CREATE EVALUATION VIEWS
+-- 4.1 CREATE VIEW TO IDENTIFY ASSOCIATED OUTPUT TABLE FOR EACH GROUND TRUTH TABLE
 
--- tables_to_compare
--- ground truth table_id and matching (based on file_name, sheet_number and table_number) output table for each method
+\echo Create tables_to_compare view
+
+-- for each table and for each method, returns the following:
+-- ground truth table_id and associated output table_id 
+-- match is based on file_name, sheet_number and table_number
 
 CREATE OR REPLACE VIEW tables_to_compare
 AS
@@ -145,14 +150,23 @@ SELECT gt.table_id AS gt_table_id,
        gt.table_name,
        ot.table_method 
 FROM gt_tables gt
-JOIN output_tables ot
+LEFT JOIN output_tables ot -- RETURN ALL GT TABLES WHETHER OR NOT AN OUTPUT TABLE EXISTS
 ON gt.table_name = ot.table_name
 ORDER BY gt.table_id;
 
 ALTER VIEW tables_to_compare OWNER TO table_model;
 
--- gt_label_set and output_label_set
--- both based on tables_to_compare view
+-- 4.2 CREATE VIEWS THAT RETURN THE 'SET OF INSTANCES'
+--     S for ground truth
+--     R for extracted tables
+--     views are based on tables_to_compare view
+
+-- NOTE THESE CURRENTLY SOMETIMES RETURN NO ROWS
+-- NEED TO WORK OUT HOW TO CREATE CONFUSION MATRIX VIEW IN THIS CASE
+
+\echo Create gt_label_set and output_label_set views
+
+-- return the "set of labels"
 
 CREATE OR REPLACE VIEW gt_label_set 
 AS
@@ -176,8 +190,9 @@ ON l.label_cell_id=tc.cell_id;
 
 ALTER VIEW output_label_set OWNER TO table_model;
 
--- gt_entry_set and output_entry_set
--- both based on tables_to_compare view
+\echo Create gt_entry_set and output_entry_set views
+
+-- return the "set of entries"
 
 CREATE OR REPLACE VIEW gt_entry_set
 AS
@@ -201,7 +216,90 @@ ON e.entry_cell_id=tc.cell_id;
 
 ALTER VIEW output_entry_set OWNER TO table_model;
 
--- Create entry_confusion view: confusion matrix for the set of entries per table and per model
+\echo Create gt_entry_label_set and output_entry_label_set views
+
+-- return the "set of entry-label pairs"
+
+CREATE OR REPLACE VIEW gt_entry_label_set
+AS
+SELECT t2c.table_name, 
+       etc.left_col, etc.top_row, etc.cell_content as entry, 
+       ltc.cell_content as label
+FROM tables_to_compare t2c
+JOIN table_cell etc
+ON t2c.gt_table_id=etc.table_id
+JOIN table_cell ltc
+ON t2c.gt_table_id=ltc.table_id
+JOIN entry_label el
+ON el.entry_cell_id=etc.cell_id
+AND el.label_cell_id=ltc.cell_id;
+
+ALTER VIEW gt_entry_label_set OWNER TO table_model;
+
+CREATE OR REPLACE VIEW output_entry_label_set
+AS
+SELECT t2c.table_name, t2c.table_method,
+       etc.left_col, etc.top_row, etc.cell_content as entry, 
+       ltc.cell_content as label
+FROM tables_to_compare t2c
+JOIN table_cell etc
+ON t2c.output_table_id=etc.table_id
+JOIN table_cell ltc
+ON t2c.output_table_id=ltc.table_id
+JOIN entry_label el
+ON el.entry_cell_id=etc.cell_id
+AND el.label_cell_id=ltc.cell_id;
+
+ALTER VIEW output_entry_label_set OWNER TO table_model;
+
+\echo Create gt_label_label_set and output_label_label_set views
+
+-- return the "set of label-label pairs"
+
+CREATE OR REPLACE VIEW gt_label_label_set
+AS
+SELECT t2c.table_name, 
+       cltc.left_col, cltc.top_row, cltc.cell_content as label, 
+       pltc.cell_content as parent_label
+FROM tables_to_compare t2c
+JOIN table_cell cltc
+ON t2c.gt_table_id=cltc.table_id
+JOIN table_cell pltc
+ON t2c.gt_table_id=pltc.table_id
+JOIN label l
+ON l.label_cell_id=cltc.cell_id
+AND l.parent_label_cell_id=pltc.cell_id;
+
+ALTER VIEW gt_label_label_set OWNER TO table_model;
+
+CREATE OR REPLACE VIEW output_label_label_set
+AS
+SELECT t2c.table_name, t2c.table_method,
+       cltc.left_col, cltc.top_row, cltc.cell_content as label, 
+       pltc.cell_content as parent_label
+FROM tables_to_compare t2c
+JOIN table_cell cltc
+ON t2c.output_table_id=cltc.table_id
+JOIN table_cell pltc 
+ON t2c.output_table_id=pltc.table_id
+JOIN label l
+ON l.label_cell_id=cltc.cell_id
+AND l.parent_label_cell_id=pltc.cell_id;
+
+ALTER VIEW output_label_label_set OWNER TO table_model;
+
+
+-- 4.3 CREATE VIEWS THAT RETURN THE CONFUSION MATRIX
+--     S for ground truth
+--     R for extracted tables
+--     views are based on the gt_<instance>_set and output_<instance>_set views
+
+-- NOTE THAT WHERE A SET IS EMPTY FOR A GIVEN TABLE (OR FOR ALL TABLES)
+-- THE CONFUSION MATRIX SHOULD STILL CONTAIN A ROW FOR THAT TABLE
+-- THE CORRESPONDING COUNTS SHOULD BE DISPLAYED AS ZERO
+
+/echo Create entry_confusion view
+-- Confusion matrix for the set of entries per table and per model
 
 CREATE OR REPLACE VIEW entry_confusion AS
 WITH gtec AS
@@ -228,11 +326,16 @@ SELECT gtec.table_name,
        oec.output_entry_count-etp.entry_true_pos AS entry_false_pos, 
        gtec.gt_entry_count-etp.entry_true_pos AS entry_false_neg, 
        etp.entry_true_pos
-FROM gtec JOIN oec ON gtec.table_name=oec.table_name
-JOIN etp ON oec.table_name=etp.table_name AND oec.table_method=etp.table_method;
+FROM tables_to_compare t2c	-- driving table for list of table_names
+LEFT JOIN gtec on t2c.table_name=gtec.table_name
+LEFT JOIN oec ON t2c.table_name=oec.table_name AND t2c.table_method=oec.table_method
+LEFT JOIN etp ON t2c.table_name=etp.table_name AND t2c.table_method=etp.table_method
+ORDER BY table_name, method_name;
 
 ALTER VIEW entry_confusion OWNER TO table_model;
 
+/echo Create label_confusion view
+-- Confusion matrix for the set of labels per table and per model
 
 CREATE OR REPLACE VIEW label_confusion AS
 WITH gtlc AS
@@ -241,7 +344,7 @@ FROM gt_label_set
 GROUP BY table_name),
 olc AS
 (select table_name, table_method, count(*) AS output_label_count
-FROM output_entry_set
+FROM output_label_set
 GROUP BY table_name, table_method),
 ltp AS
 (SELECT ol.table_name, ol.table_method, count(*) AS label_true_pos
@@ -260,7 +363,84 @@ SELECT gtlc.table_name,
        olc.output_label_count-ltp.label_true_pos AS label_false_pos, 
        gtlc.gt_label_count-ltp.label_true_pos AS label_false_neg, 
        ltp.label_true_pos
-FROM gtlc JOIN olc ON gtlc.table_name=olc.table_name
-JOIN ltp ON olc.table_name=ltp.table_name AND olc.table_method=ltp.table_method;
+FROM tables_to_compare t2c	-- driving table for list of table_names
+LEFT JOIN gtlc ON t2c.table_name=gtlc.table_name
+LEFT JOIN olc ON t2c.table_name=olc.table_name AND t2c.table_method=olc.table_method
+LEFT JOIN ltp ON t2c.table_name=ltp.table_name AND t2c.table_method=ltp.table_method
+ORDER BY table_name, method_name;
 
 ALTER VIEW label_confusion OWNER TO table_model;
+
+/echo Create entry_label_confusion view
+-- Confusion matrix for the set of entry-label pairs per table and per model
+
+CREATE OR REPLACE VIEW entry_label_confusion AS
+WITH gtelc AS
+(select table_name, count(*) AS gt_entry_label_count
+FROM gt_entry_label_set
+GROUP BY table_name),
+oelc AS
+(select table_name, table_method, count(*) AS output_entry_label_count
+FROM output_entry_label_set
+GROUP BY table_name, table_method),
+eltp AS
+(SELECT oel.table_name, oel.table_method, count(*) AS entry_label_true_pos
+FROM gt_entry_label_set gtel
+JOIN output_entry_label_set oel
+ON gtel.table_name=oel.table_name
+AND gtel.left_col=oel.left_col
+AND gtel.top_row=oel.top_row
+AND gtel.label=oel.label
+--AND gtel.category_name=oel.category_name
+group by oel.table_name, oel.table_method)
+SELECT gtelc.table_name,
+       oelc.table_method as method_name,
+       gtelc.gt_entry_label_count AS gt_total_entry_labels,
+       oelc.output_entry_label_count AS output_total_entry_labels,
+       oelc.output_entry_label_count-eltp.entry_label_true_pos AS entry_label_false_pos,
+       gtelc.gt_entry_label_count-eltp.entry_label_true_pos AS entry_label_false_neg,
+       eltp.entry_label_true_pos
+FROM tables_to_compare t2c	-- driving table for list of table_names
+LEFT JOIN gtelc ON t2c.table_name=gtelc.table_name
+LEFT JOIN oelc ON t2c.table_name=oelc.table_name AND t2c.table_method=oelc.table_method
+LEFT JOIN eltp ON t2c.table_name=eltp.table_name AND t2c.table_method=eltp.table_method
+ORDER BY table_name, method_name;
+
+ALTER VIEW entry_label_confusion OWNER TO table_model;
+
+/echo Create label_label_confusion view
+-- Confusion matrix for the set of label-label pairs per table and per model
+
+CREATE OR REPLACE VIEW label_label_confusion AS
+WITH gtllc AS
+(select table_name, count(*) AS gt_label_label_count
+FROM gt_label_label_set
+GROUP BY table_name),
+ollc AS
+(select table_name, table_method, count(*) AS output_label_label_count
+FROM output_entry_label_set
+GROUP BY table_name, table_method),
+lltp AS
+(SELECT oll.table_name, oll.table_method, count(*) AS label_label_true_pos
+FROM gt_label_label_set gtll
+JOIN output_label_label_set oll
+ON gtll.table_name=oll.table_name
+AND gtll.left_col=oll.left_col
+AND gtll.top_row=oll.top_row
+AND gtll.label=oll.label
+--AND gtll.category_name=oll.category_name
+group by oll.table_name, oll.table_method)
+SELECT gtllc.table_name,
+       ollc.table_method as method_name,
+       gtllc.gt_label_label_count AS gt_total_label_labels,
+       ollc.output_label_label_count AS output_total_label_labels,
+       ollc.output_label_label_count-lltp.label_label_true_pos AS label_label_false_pos,
+       gtllc.gt_label_label_count-lltp.label_label_true_pos AS label_label_false_neg,
+       lltp.label_label_true_pos
+FROM tables_to_compare t2c	-- driving table for list of table_names
+LEFT JOIN gtllc ON t2c.table_name=gtllc.table_name
+LEFT JOIN ollc ON t2c.table_name=ollc.table_name AND t2c.table_method=ollc.table_method
+LEFT JOIN lltp ON t2c.table_name=lltp.table_name AND t2c.table_method=lltp.table_method
+ORDER BY table_name, method_name;
+
+ALTER VIEW label_label_confusion OWNER TO table_model;

@@ -196,7 +196,7 @@ $pg_conn_table_model -f tableModelDDL/06_create_procedures.sql
 if [[ $dataset_method == tabbyxl ]]
 then
   input_file_path=$xlsx_filepath
-  python3 ./utils/get_start_end.py $xlsx_filepath
+  python3 utils/get_start_end.py $xlsx_filepath
 fi
 
 # Call map_${dataset_method}.py passing TRUE for "is_gt"
@@ -206,7 +206,7 @@ echo INFO: Mapping $dataset_method ground truth to table model
 for file in $(ls $gt_filepath)
 do
   echo INFO: Processing file ${gt_filepath}/${file}
-  python3 ./MapToTableModel/map_${dataset_method}.py $gt_filepath $file TRUE
+  python3 MapToTableModel/map_${dataset_method}.py $gt_filepath $file 'TRUE'
 done
 
 #-----------------------------------------------------------------------#
@@ -234,23 +234,21 @@ do
   for file in $(ls $outputfiledir)
   do
     echo INFO: Processing extracted file ${outputfiledir}/${file}
-    python3 ./MapToTableModel/map_${method}.py $outputfiledir $file FALSE
+    python3 ./MapToTableModel/map_${method}.py $outputfiledir $file 'FALSE'
   done
 done
 
 #-----------------------------------------------------------------------#
-#----- 5. Evaluate output (compare with table model)               -----#
+#----- 5. Evaluate output                                          -----#
 #-----------------------------------------------------------------------#
 
-for method in $methods
-do
-  echo
-  echo INFO: Evaluating tables extracted by $method 
-  python3  ./EvaluateOutput/evaluate_${method}.py 
-  # execute relevant script in EvaluateOutput
-  # to compare GT against extracted tables in table_model 
-  # should generate confusion matrix
-done
+# Compare GT against extracted tables for each method
+# Generate confusion matrices
+
+echo INFO: Evaluating extracted tables
+
+$pg_conn_table_model -f EvaluateOutput/00_display_conf_matrix.sql
+
 
 #-----------------------------------------------------------------------#
 #----- 6. Display Graph(s)                                         -----#                
