@@ -319,13 +319,13 @@ AND gte.left_col=oe.left_col
 AND gte.top_row=oe.top_row
 AND gte.entry=oe.entry
 group by oe.table_name, oe.table_method)
-SELECT gtec.table_name,
-       oec.table_method as method_name, 
-       gtec.gt_entry_count AS gt_total_entries,
-       oec.output_entry_count AS output_total_entries,
-       oec.output_entry_count-etp.entry_true_pos AS entry_false_pos, 
-       gtec.gt_entry_count-etp.entry_true_pos AS entry_false_neg, 
-       etp.entry_true_pos
+SELECT t2c.table_name,
+       t2c.table_method as method_name, 
+       COALESCE(gtec.gt_entry_count,0) AS gt_total_entries,
+       COALESCE(oec.output_entry_count,0) AS output_total_entries,
+       COALESCE(oec.output_entry_count,0)-COALESCE(etp.entry_true_pos,0) AS entry_false_pos, 
+       COALESCE(gtec.gt_entry_count,0)-COALESCE(etp.entry_true_pos,0) AS entry_false_neg, 
+       COALESCE(etp.entry_true_pos,0) AS entry_true_pos
 FROM tables_to_compare t2c	-- driving table for list of table_names
 LEFT JOIN gtec on t2c.table_name=gtec.table_name
 LEFT JOIN oec ON t2c.table_name=oec.table_name AND t2c.table_method=oec.table_method
@@ -356,13 +356,13 @@ AND gtl.top_row=ol.top_row
 AND gtl.label=ol.label
 --AND gtl.category_name=ol.category_name
 group by ol.table_name, ol.table_method)
-SELECT gtlc.table_name,
-       olc.table_method as method_name, 
-       gtlc.gt_label_count AS gt_total_labels,
-       olc.output_label_count AS output_total_labels,
-       olc.output_label_count-ltp.label_true_pos AS label_false_pos, 
-       gtlc.gt_label_count-ltp.label_true_pos AS label_false_neg, 
-       ltp.label_true_pos
+SELECT t2c.table_name,
+       t2c.table_method as method_name, 
+       COALESCE(gtlc.gt_label_count,0) AS gt_total_labels,
+       COALESCE(olc.output_label_count,0) AS output_total_labels,
+       COALESCE(olc.output_label_count,0)-COALESCE(ltp.label_true_pos,0) AS label_false_pos, 
+       COALESCE(gtlc.gt_label_count,0)-COALESCE(ltp.label_true_pos,0) AS label_false_neg, 
+       COALESCE(ltp.label_true_pos,0) AS label_true_pos
 FROM tables_to_compare t2c	-- driving table for list of table_names
 LEFT JOIN gtlc ON t2c.table_name=gtlc.table_name
 LEFT JOIN olc ON t2c.table_name=olc.table_name AND t2c.table_method=olc.table_method
@@ -393,13 +393,13 @@ AND gtel.top_row=oel.top_row
 AND gtel.label=oel.label
 --AND gtel.category_name=oel.category_name
 group by oel.table_name, oel.table_method)
-SELECT gtelc.table_name,
-       oelc.table_method as method_name,
-       gtelc.gt_entry_label_count AS gt_total_entry_labels,
-       oelc.output_entry_label_count AS output_total_entry_labels,
-       oelc.output_entry_label_count-eltp.entry_label_true_pos AS entry_label_false_pos,
-       gtelc.gt_entry_label_count-eltp.entry_label_true_pos AS entry_label_false_neg,
-       eltp.entry_label_true_pos
+SELECT t2c.table_name,
+       t2c.table_method as method_name,
+       COALESCE(gtelc.gt_entry_label_count,0) AS gt_total_entry_labels,
+       COALESCE(oelc.output_entry_label_count,0) AS output_total_entry_labels,
+       COALESCE(oelc.output_entry_label_count,0)-COALESCE(eltp.entry_label_true_pos,0) AS entry_label_false_pos,
+       COALESCE(gtelc.gt_entry_label_count,0)-COALESCE(eltp.entry_label_true_pos,0) AS entry_label_false_neg,
+       COALESCE(eltp.entry_label_true_pos,0) AS entry_label_true_pos
 FROM tables_to_compare t2c	-- driving table for list of table_names
 LEFT JOIN gtelc ON t2c.table_name=gtelc.table_name
 LEFT JOIN oelc ON t2c.table_name=oelc.table_name AND t2c.table_method=oelc.table_method
@@ -430,13 +430,13 @@ AND gtll.top_row=oll.top_row
 AND gtll.label=oll.label
 --AND gtll.category_name=oll.category_name
 group by oll.table_name, oll.table_method)
-SELECT gtllc.table_name,
-       ollc.table_method as method_name,
-       gtllc.gt_label_label_count AS gt_total_label_labels,
-       ollc.output_label_label_count AS output_total_label_labels,
-       ollc.output_label_label_count-lltp.label_label_true_pos AS label_label_false_pos,
-       gtllc.gt_label_label_count-lltp.label_label_true_pos AS label_label_false_neg,
-       lltp.label_label_true_pos
+SELECT t2c.table_name,
+       t2c.table_method as method_name,
+       COALESCE(gtllc.gt_label_label_count,0) AS gt_total_label_labels,
+       COALESCE(ollc.output_label_label_count,0) AS output_total_label_labels,
+       COALESCE(ollc.output_label_label_count,0)-COALESCE(lltp.label_label_true_pos,0) AS label_label_false_pos,
+       COALESCE(gtllc.gt_label_label_count,0)-COALESCE(lltp.label_label_true_pos,0) AS label_label_false_neg,
+       COALESCE(lltp.label_label_true_pos,0) AS label_label_true_pos
 FROM tables_to_compare t2c	-- driving table for list of table_names
 LEFT JOIN gtllc ON t2c.table_name=gtllc.table_name
 LEFT JOIN ollc ON t2c.table_name=ollc.table_name AND t2c.table_method=ollc.table_method
