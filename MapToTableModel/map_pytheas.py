@@ -1,36 +1,78 @@
 import sys 
 import psycopg2
 import json
+import re
 
 # Goals:
-#   Extract information from given Pytheas ground truth or table output file and map it to table model
+#   Extract tables from given Pytheas ground truth file
+#   or discovered_tables from given Pytheas table output file 
+#   and map the data to the table model
 
 # 1. Process input parameters:
 
 #   i. input_filepath       path to file to be processed
-input_filepath = str(sys.argv[1])  
-#   ii. input_filename       name of file to be processed (<basename>.json)
-input_filename = str(sys.argv[2])               
-#   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
-if str(sys.argv[3]) == 'TRUE':
-    is_gt=True
-else:
-    is_gt=False
+# input_filepath = str(sys.argv[1])  
+# #   ii. input_filename       name of file to be processed (<basename>.json)
+# input_filename = str(sys.argv[2])               
+# #   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
+# if str(sys.argv[3]) == 'TRUE':
+#     is_gt=True
+# else:
+#     is_gt=False
+
+input_filepath="/tmp/test_20_05_2023/pytheas"
+input_filename="C10001.json"
+is_gt=False
 
 input_file = input_filepath+"/"+input_filename  # Fully qualified file
 
 #    Note that a Pytheas ground truth file may contain multiple tables
 
-# input_file="/home/karen/workspaces/classification_extraction_tests/test_files/tabby_small_file/gt/pytheas/smpl.json"
-
 # Get base filename based on input_file path and name
 filename=input_filename.split('.json')[0]
 #print("processing base filename: "+filename)
 
-with open(input_file) as f:
-  annotations = json.load(f)
 
-annotated = annotations['tables']
+if is_gt:
+
+  with open(input_file) as f:
+    annotations = json.load(f)
+
+  tables = annotations['tables']
+
+else:
+  # Processing a json file containing extracted tables
+  # The json is not in the format expected by json.load() 
+  # Replacements are necessary in order to obtain valid json that can be loaded
+  # Want just the discovered_tables part, i.e. starting from first opening curly bracket
+
+    json_in=''
+
+    with open(input_file) as f:
+        started=False
+        for line in f:
+            if (line.startswith('{')):
+                started=True
+            if started:
+                json_in+=line
+
+    # Replace ' in the middle of a double-quoted value with ''
+    new_json = re.sub('(".+)\'(.+")','\g<1>\'\'\g<2>',json_in)
+
+    # Replace all ' with "  
+    new_json = re.sub('\'','"',new_json)
+
+    # Now replace "" in the middle of a quoted value with '
+    new_json = re.sub('(".+)""(.+")','\g<1>\'\g<2>',new_json)
+
+    # Replace all <number>: with "<number>":
+    new_json = re.sub('([0-9]+)(:)', '\"\g<1>\":', new_json) 
+
+    # Remove newline in the middle of a value
+    new_json = re.sub('\"\n\ +\"', '', new_json)
+    #print(new_json)
+
+    tables = json.loads(new_json) 
 
 # 2. Create connection to table_model database with search_path set to table_model
 #    (Need to parameterise this)
@@ -45,8 +87,8 @@ cur.execute('SET SEARCH_PATH=table_model')
 
 # 3. Process tables
 
-for i in range(len(annotated)):
-    table=annotated[i]
+for i in range(len(tables)):
+    table=tables[i]
     tablenum=table['table_counter']
     tablestart=table['top_boundary']
     tableend=table['bottom_boundary']

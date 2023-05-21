@@ -5,6 +5,7 @@ from io import StringIO
 
 # Goals: 
 #   Extract information from given Hypoparsr ground truth or extracted tables file and map it to table model
+#   Hypoparsr extracted tables file is currently not in feather format
 
 # 1. Process input parameters:
 
@@ -13,21 +14,29 @@ input_filepath = str(sys.argv[1])
 #   ii. input_filename       name of file to be processed (<basename>.csv.feather)
 input_filename = str(sys.argv[2])               
 #   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
-is_gt = str(sys.argv[3])
+if str(sys.argv[3]) == 'TRUE':
+    table_is_gt='TRUE'
+    is_gt=True
+else:
+    table_is_gt='FALSE'
+    is_gt=False
+
+# sample file for testing
+# input_filepath="/tmp/test_21_05_2023/hypoparsr/"
+# input_filename="C10001.csv.feather"
+# is_gt=False
 
 input_file = input_filepath+"/"+input_filename  # Fully qualified file
 
-# sample input_file for testing
-# input_file="/home/karen/workspaces/classification_extraction_tests/test_files/hypoparsr_demo_file/0263db61-9815-4a34-acc9-149a090bdb65.csv.feather"
-
 #    Get base filename based on input_file path and name
 
-filename=input_filename.split('.csv.feather')[0]
+# filename=input_filename.split('.csv.feather')[0]
+filename=input_filename.split('.csv')[0]
 
 #    Get dataframe from input file
 
 df = feather.read_dataframe(input_file) 
-print(df)
+# print(df)
 
 # 2. Create connection to table_model database with search_path set to table_model
 
@@ -52,17 +61,35 @@ tablestart_row=0
 
 # 3.1 Insert into source_table (sheetnum will always be zero for Hypoparsr, tableend isn't being populated for now)
 
-insert_stmt="INSERT INTO source_table \
-             (table_is_gt, table_start_col, table_start_row, file_name, sheet_number, table_number) \
-             VALUES ("+is_gt+",'"+str(tablestart_col)+"', "+str(tablestart_row)+", '"+filename+"', "+str(sheet_num)+", "+str(table_num)+")"
+insert_stmt="INSERT INTO source_table( \
+                table_is_gt, \
+                table_method, \
+                table_start_col, \
+                table_start_row, \
+                file_name, \
+                sheet_number, \
+                table_number) \
+            VALUES ( \
+                "+table_is_gt+", \
+                'hypoparsr', \
+                '"+str(tablestart_col)+"', \
+                "+str(tablestart_row)+", \
+                '"+filename+"', \
+                "+str(sheet_num)+", \
+                "+str(table_num)+")"
 cur.execute(insert_stmt)
 
 #    get table_id
-select_stmt="SELECT table_id FROM source_table \
-             WHERE file_name='"+filename+"' AND sheet_number="+str(sheet_num)+" AND table_number="+str(table_num)+""
+select_stmt="SELECT table_id \
+             FROM source_table \
+             WHERE table_is_gt="+table_is_gt+" \
+             AND table_method='hypoparsr' \
+             AND file_name='"+filename+"' \
+             AND sheet_number="+str(sheet_num)+" \
+             AND table_number="+str(table_num)+""
 cur.execute(select_stmt)
 table_id = cur.fetchone()[0]
-#print("table_id: ",table_id)
+print("table_id: ",table_id)
 
 #    get number of (data) rows in dataframe
 num_rows=df.shape[0]
@@ -73,8 +100,13 @@ df_columns=list(df)
 
 # 3.2 Insert into category (only 1 category for hypoparsr - ColumnHeading)
 
-insert_stmt="INSERT INTO category (category_name) VALUES ('ColumnHeading')"
-cur.execute(insert_stmt)
+insert_stmt_cat="INSERT INTO category ( \
+                    category_name, \
+                    table_id) \
+                 VALUES ( \
+                    'ColumnHeading', \
+                    "+str(table_id)+")"
+cur.execute(insert_stmt_cat)
 
 # 3.3 Populate label_temp temporary table
 
@@ -88,8 +120,16 @@ heading_row=tablestart_row+1
 
 for col in df_columns:
     #print(col)
-    insert_lt="INSERT INTO label_temp (label_value, label_provenance_row, label_provenance_col, label_category) \
-               VALUES ('"+str(col)+"',"+str(heading_row)+","+str(heading_col)+",'ColumnHeading')"
+    insert_lt="INSERT INTO label_temp ( \
+                label_value, \
+                label_provenance_row, \
+                label_provenance_col, \
+                label_category) \
+               VALUES ( \
+                '"+str(col)+"', \
+                "+str(heading_row)+", \
+                "+str(heading_col)+", \
+                'ColumnHeading')"
     cur.execute(insert_lt)
     heading_col+=1
 
@@ -104,9 +144,18 @@ for row_id in range(num_rows):
   col_id=first_data_col               # reset col_id for each row
   for col in df_columns:
     cell=df.loc[row_id][col]
+    cell=str(cell).replace("'","''")   # cell value with single quotes escaped
     # print('row_id: '+str(row_id)+' cell: '+str(cell))
-    insert_et="INSERT INTO entry_temp (entry_value, entry_provenance_row, entry_provenance_col, entry_labels) \
-               VALUES ('"+str(cell)+"',"+str(row_id+first_data_row)+","+str(col_id)+",'"+str(col)+"')"
+    insert_et="INSERT INTO entry_temp ( \
+                entry_value, \
+                entry_provenance_row, \
+                entry_provenance_col, \
+                entry_labels) \
+               VALUES ( \
+                '"+str(cell)+"', \
+                "+str(row_id+first_data_row)+", \
+                "+str(col_id)+", \
+                '"+str(col)+"')"
     cur.execute(insert_et)
     col_id+=1
 
@@ -160,10 +209,10 @@ cur.execute(insert_stmt_el)
 
 # Display contents of hypoparsr_canonical_table_view
 
-select_ctv="SELECT * FROM hypoparsr_canonical_table_view where table_id="+str(table_id)
-cur.execute(select_ctv)
-canonical_table = cur.fetchall()
-print(canonical_table)
+# select_ctv="SELECT * FROM hypoparsr_canonical_table_view where table_id="+str(table_id)
+# cur.execute(select_ctv)
+# canonical_table = cur.fetchall()
+# print(canonical_table)
 
 # Empty temp tables
 

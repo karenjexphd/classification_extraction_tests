@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS table_model.source_table
 (
   table_id integer generated always as identity,
-  file_name text,
+  file_name text NOT NULL,
   sheet_number integer,
   table_number integer,
   table_is_gt  boolean DEFAULT FALSE,

@@ -1,17 +1,12 @@
 #-----------------------------------------------------------------------#
-# File containing instructions for creating Docker images               #
-#   docker-tabby containing TabbyXL runtime environment                 #
-# See DockerSetup.sh for prerequisites                                  #
+# File containing instructions for adding scripts to base Docker image  #
+#   docker-hypoparsr-base to create docker-hypoparsr image              #
 # Commands run from cloned classification_extraction_tests repo         #
 #-----------------------------------------------------------------------#
 
 mkdir /tmp/hypoparsr_dockerfiles
 cp -r test_files /tmp/hypoparsr_dockerfiles
 cd /tmp/hypoparsr_dockerfiles
-
-echo "INFO: Cloning hypoparsr repo"
-
-git clone git@github.com:karenjexphd/hypoparsr.git
 
 echo "INFO: Creating script to apply hypoparsr table extraction against given .csv file"
 
@@ -62,24 +57,18 @@ EOF
 
 chmod u+x call_hypoparsr_apply_to_file.sh
 
-echo "INFO: Creating hypoparsr install script"
-
-cat > hypoparsr_install.r << EOF
-devtools::install_github("karenjexphd/hypoparsr")
-EOF
-
 echo "INFO: Creating Dockerfile"
+
+# Create Dockerfile
 
 cat > Dockerfile << EOF
 # syntax=docker/dockerfile:1
-FROM rocker/verse:3.6.0                  
+FROM karenjexphd/table_extraction_tests:docker-hypoparsr-base
 WORKDIR /app
 COPY hypoparsr_apply_to_file.r hypoparsr_apply_to_file.r 
 COPY call_hypoparsr_apply_to_file.sh call_hypoparsr_apply_to_file.sh
-COPY hypoparsr_install.r hypoparsr_install.r
 COPY hypoparsr hypoparsr
 COPY test_files test_data
-RUN Rscript hypoparsr_install.r
 EOF
 
 echo "INFO: Building docker-hypoparsr Docker image"

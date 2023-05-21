@@ -154,7 +154,8 @@ for row in all_entries_rows:
                     entry_provenance, \
                     entry_provenance_col, \
                     entry_provenance_row) \
-                    VALUES ("+str(table_id)+", \
+                   VALUES ( \
+                    "+str(table_id)+", \
                     '"+entry_val+"', \
                     '"+entry_prov+"', \
                     '"+entry_prov_col+"', \

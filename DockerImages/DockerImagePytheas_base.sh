@@ -1,6 +1,6 @@
 #-----------------------------------------------------------------------#
 # File containing instructions for creating Docker image                #
-#   docker-pytheas containing Pytheas runtime environment               #
+#   docker-pytheas-base containing Pytheas runtime environment          #
 # See DockerSetup.sh for prerequisites                                  #
 # Commands run from cloned classification_extraction_tests repo         #
 #-----------------------------------------------------------------------#

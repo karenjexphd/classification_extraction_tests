@@ -3,7 +3,7 @@
 \echo Create constraints on source_table
 
 ALTER TABLE table_model.source_table
-ADD CONSTRAINT uk_source_table UNIQUE (file_name, sheet_number, table_number, table_is_gt); 
+ADD CONSTRAINT uk_source_table UNIQUE (file_name, sheet_number, table_number, table_method, table_is_gt); 
 
 \echo Create constraints on category
 
