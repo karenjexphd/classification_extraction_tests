@@ -40,10 +40,16 @@ df = feather.read_dataframe(input_file)
 
 # 2. Create connection to table_model database with search_path set to table_model
 
+# tm_conn = psycopg2.connect(
+#     host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
+#     database="table_model",
+#     user="postgres")
+
 tm_conn = psycopg2.connect(
-    host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
+    host="127.0.0.1",
     database="table_model",
     user="postgres")
+
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
 
@@ -206,13 +212,6 @@ insert_stmt_el="INSERT INTO entry_label (entry_cell_id, label_cell_id) \
            JOIN tabby_cell_view e_cell ON elt.entry_provenance = e_cell.cell_provenance \
            JOIN tabby_cell_view l_cell ON elt.label_provenance = l_cell.cell_provenance"
 cur.execute(insert_stmt_el)
-
-# Display contents of hypoparsr_canonical_table_view
-
-# select_ctv="SELECT * FROM hypoparsr_canonical_table_view where table_id="+str(table_id)
-# cur.execute(select_ctv)
-# canonical_table = cur.fetchall()
-# print(canonical_table)
 
 # Empty temp tables
 

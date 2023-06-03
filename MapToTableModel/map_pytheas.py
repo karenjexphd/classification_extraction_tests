@@ -77,8 +77,13 @@ else:
 # 2. Create connection to table_model database with search_path set to table_model
 #    (Need to parameterise this)
 
+# tm_conn = psycopg2.connect(
+#     host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
+#     database="table_model",
+#     user="postgres")
+
 tm_conn = psycopg2.connect(
-    host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
+    host="127.0.0.1",
     database="table_model",
     user="postgres")
 

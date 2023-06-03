@@ -263,6 +263,8 @@ done
 
 # Display results that compare the methods
 
+python3 ./utils/plot_results.py ${outputfiledir}/scatterplot.png
+
 # --------------------------------------------------------------------- #
 
 echo

@@ -330,196 +330,432 @@ WHERE NOT source_table.table_is_gt;
 ALTER VIEW output_label_label_set OWNER TO table_model;
 
 
+-- definitive list of tables and methods to be compared
+-- one row per table and per method
+
+-- THERE MUST BE A BETTER WAY TO DO THIS !
+
+CREATE OR REPLACE VIEW table_method_list AS
+    WITH 
+      table_names AS (SELECT DISTINCT file_name||'_'||sheet_number||'_'||table_number AS table_name FROM source_table),
+      table_methods AS (SELECT DISTINCT table_method FROM source_table)
+    SELECT
+      table_names.table_name,
+      table_methods.table_method
+    FROM
+      table_names CROSS JOIN table_methods;
+
+ALTER VIEW table_method_list OWNER TO table_model;
+
+
 -- 4.3 CREATE VIEWS THAT RETURN THE CONFUSION MATRIX
 --     S for ground truth
 --     R for extracted tables
 --     views are based on the gt_<instance>_set and output_<instance>_set views
 
-\echo Create entry_confusion view
--- Confusion matrix for the set of entries per table and per model
+
+-- ENTRY_CONFUSION - views to display confusion matrix for set of entries
+
+\echo Create entry_confusion view (and the views that are used to build it)
+
+-- One row per table and per method being compared
+-- Count is zero if no entries exist for given table
+CREATE OR REPLACE VIEW gt_entry_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) FILTER( WHERE gt_entry_set.table_name is not null) AS gt_entries
+  FROM table_method_list   -- use table_method_list as driving table
+    LEFT JOIN gt_entry_set -- ensures one row per table and per method
+      ON table_method_list.table_name = gt_entry_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW gt_entry_counts OWNER TO table_model;
+
+-- One row per table and per method being compared. 
+-- Count is zero if no entries exist for given tbale nd method
+CREATE OR REPLACE VIEW output_entry_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) FILTER( WHERE output_entry_set.table_name is not null) AS output_entries
+  FROM table_method_list       -- use table_method_list as driving table
+    FULL JOIN output_entry_set -- ensures one row per table and per method
+      ON  table_method_list.table_name = output_entry_set.table_name
+      AND table_method_list.table_method = output_entry_set.table_method
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW output_entry_counts OWNER TO table_model;
+
+-- Intersection of ground truth and output per table and per method
+CREATE OR REPLACE VIEW entry_true_positives AS
+  SELECT
+    table_method_list.table_name, 
+    table_method_list.table_method, 
+    -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
+    count(*) 
+      FILTER (
+        WHERE output_entry_set.entry = gt_entry_set.entry
+        AND output_entry_set.left_col = gt_entry_set.left_col
+        AND output_entry_set.top_row = gt_entry_set.top_row) 
+      AS entry_true_pos
+  FROM table_method_list
+    FULL JOIN output_entry_set
+      ON table_method_list.table_name = output_entry_set.table_name
+      AND table_method_list.table_method = output_entry_set.table_method
+    FULL JOIN gt_entry_set 
+      ON table_method_list.table_name = gt_entry_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW entry_true_positives OWNER TO table_model;
 
 CREATE OR REPLACE VIEW entry_confusion AS
-WITH data (
-  method_name, 
-  table_name,
-  output_table_name,
-  gt_entry_count, 
-  output_entry_count,
-  true_positive_count, 
-  false_positive_count, 
-  false_negative_count) 
-AS (
-  SELECT DISTINCT
-    tables_to_compare.table_method,
-    gt_entry_set.table_name,
-    output_entry_set.table_name,
-    /* total number of items in the ground truth set */
-    count(*)
-      filter( where gt_entry_set.table_name is not null)
-      over (partition by tables_to_compare.table_name, tables_to_compare.table_method) as gt_entry_count,
-    /* total number of items in the extracted set */
-    count(*)
-      filter(where output_entry_set.table_name is not null)
-      over (partition by output_entry_set.table_name, output_entry_set.table_method) as output_entry_count,
-    /* intersection - true positives */
-    count(*)
-      filter(where output_entry_set.table_name is not null and gt_entry_set.table_name is not null)
-      over (partition by tables_to_compare.table_name, output_entry_set.table_method) as true_positive_count,
-    /* false positives */
-    count(*)
-      filter(where output_entry_set.table_name is not null and gt_entry_set.table_name is null)
-      over (partition by output_entry_set.table_name, output_entry_set.table_method) as false_positive_count,
-    /* false negatives */
-    count(*)
-      FILTER(WHERE gt_entry_set.table_name IS NOT NULL AND output_entry_set.table_name IS NULL)
-      OVER (PARTITION BY tables_to_compare.table_name, tables_to_compare.table_method) AS false_negative_count
-  FROM gt_entry_set
-    /* Natural join will join on table_name and remove the duplicated column table_name */
-    NATURAL JOIN tables_to_compare
-    /* We now need the extracted values */ 
-    FULL OUTER JOIN output_entry_set
-      ON gt_entry_set.table_name = output_entry_set.table_name
-        AND gt_entry_set.entry = output_entry_set.entry
-        AND gt_entry_set.left_col = output_entry_set.left_col
-        AND gt_entry_set.top_row = output_entry_set.top_row
-        AND tables_to_compare.table_method = output_entry_set.table_method                          
-  ORDER BY tables_to_compare.table_method, gt_entry_set.table_name
-)
-SELECT *
-FROM data
-WHERE output_table_name IS NOT NULL
-  AND table_name IS NOT NULL;
+WITH data AS (
+SELECT 
+  table_method_list.table_method,
+  table_method_list.table_name,
+  gt_entry_counts.gt_entries,
+  output_entry_counts.output_entries,
+  entry_true_positives.entry_true_pos AS e_true_pos,
+  output_entry_counts.output_entries - entry_true_positives.entry_true_pos AS e_false_pos,
+  gt_entry_counts.gt_entries - entry_true_positives.entry_true_pos AS e_false_neg,
+  CASE 
+    -- Avoid divide by zero error if no output_entries
+    WHEN output_entry_counts.output_entries=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (entry_true_positives.entry_true_pos::numeric/output_entry_counts.output_entries)::numeric(4,3)
+  END AS e_precision,
+  CASE 
+    -- Avoid divide by zero error if no gt_entries
+    WHEN gt_entry_counts.gt_entries=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (entry_true_positives.entry_true_pos::numeric/gt_entry_counts.gt_entries)::numeric(4,3)
+  END AS e_recall
+FROM table_method_list
+  JOIN output_entry_counts
+    ON table_method_list.table_name = output_entry_counts.table_name
+    AND table_method_list.table_method = output_entry_counts.table_method
+  JOIN gt_entry_counts
+    ON table_method_list.table_name = gt_entry_counts.table_name
+    AND table_method_list.table_method = gt_entry_counts.table_method
+  JOIN entry_true_positives
+    ON table_method_list.table_name = entry_true_positives.table_name
+    AND table_method_list.table_method = entry_true_positives.table_method
+ORDER BY table_method_list.table_method, table_method_list.table_name)
+SELECT 
+  -- Select all rows from subquery and calculate f-measure based on precision and recall
+  *,
+  CASE 
+    -- Avoid divide by zero error if no output_entry_labels
+    WHEN e_precision+e_recall=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (2*e_precision*e_recall/(e_precision+e_recall))::numeric(4,3)
+  END AS e_f_measure
+FROM data;
 
 ALTER VIEW entry_confusion OWNER TO table_model;
 
-\echo Create label_confusion view
--- Confusion matrix for the set of labels per table and per model
+-- LABEL_CONFUSION - views to display confusion matrix for set of labels
+
+\echo Create label_confusion view (and the views that are used to build it)
+
+-- One row per table and per method being compared
+-- Count is zero if no labels exist for given table
+CREATE OR REPLACE VIEW gt_label_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) FILTER( WHERE gt_label_set.table_name is not null) AS gt_labels
+  FROM table_method_list   -- use table_method_list as driving table
+    LEFT JOIN gt_label_set -- ensures one row per table and per method
+      ON table_method_list.table_name = gt_label_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW gt_label_counts OWNER TO table_model;
+
+-- One row per table and per method being compared. 
+-- Count is zero if no labels exist for given tbale nd method
+CREATE OR REPLACE VIEW output_label_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) FILTER( WHERE output_label_set.table_name is not null) AS output_labels
+  FROM table_method_list       -- use table_method_list as driving table
+    LEFT JOIN output_label_set -- ensures one row per table and per method
+      ON table_method_list.table_name = output_label_set.table_name
+      AND table_method_list.table_method = output_label_set.table_method
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW output_label_counts OWNER TO table_model;
+
+-- Intersection of ground truth and output per table and per method
+CREATE OR REPLACE VIEW label_true_positives AS
+  SELECT
+    table_method_list.table_name, 
+    table_method_list.table_method, 
+    count(*) 
+      FILTER (
+        WHERE output_label_set.label = gt_label_set.label
+        AND output_label_set.left_col = gt_label_set.left_col
+        AND output_label_set.top_row = gt_label_set.top_row)  
+      AS label_true_pos
+  FROM table_method_list
+    FULL JOIN output_label_set
+      ON table_method_list.table_name = output_label_set.table_name
+      AND table_method_list.table_method = output_label_set.table_method
+    FULL JOIN gt_label_set 
+      ON table_method_list.table_name = gt_label_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW label_true_positives OWNER TO table_model;
 
 CREATE OR REPLACE VIEW label_confusion AS
-WITH data (
-  method_name, 
-  table_name,
-  output_table_name,
-  gt_label_count, 
-  output_label_count,
-  true_positive_count, 
-  false_positive_count, 
-  false_negative_count) 
-AS (
-  SELECT DISTINCT
-    tables_to_compare.table_method,
-    gt_label_set.table_name,
-    output_label_set.table_name,
-    /* total number of items in the ground truth set */
-    count(*)
-      filter( where gt_label_set.table_name is not null)
-      over (partition by tables_to_compare.table_name, tables_to_compare.table_method) as gt_label_count,
-    /* total number of items in the extracted set */
-    count(*)
-      filter(where output_label_set.table_name is not null)
-      over (partition by output_label_set.table_name, output_label_set.table_method) as output_label_count,
-    /* intersection - true positives */
-    count(*)
-      filter(where output_label_set.table_name is not null and gt_label_set.table_name is not null)
-      over (partition by tables_to_compare.table_name, output_label_set.table_method) as true_positive_count,
-    /* false positives */
-    count(*)
-      filter(where output_label_set.table_name is not null and gt_label_set.table_name is null)
-      over (partition by output_label_set.table_name, output_label_set.table_method) as false_positive_count,
-    /* false negatives */
-    count(*)
-      FILTER(WHERE gt_label_set.table_name IS NOT NULL AND output_label_set.table_name IS NULL)
-      OVER (PARTITION BY tables_to_compare.table_name, tables_to_compare.table_method) AS false_negative_count
-  FROM gt_label_set
-    /* Natural join will join on table_name and remove the duplicated column table_name */
-    NATURAL JOIN tables_to_compare
-    /* We now need the extracted values */ 
-    FULL OUTER JOIN output_label_set
-      ON gt_label_set.table_name = output_label_set.table_name
-        AND gt_label_set.label = output_label_set.label
-        AND gt_label_set.left_col = output_label_set.left_col
-        AND gt_label_set.top_row = output_label_set.top_row
-        AND gt_label_set.category_name = output_label_set.category_name
-        AND tables_to_compare.table_method = output_label_set.table_method                          
-  ORDER BY tables_to_compare.table_method, gt_label_set.table_name
-)
-SELECT *
-FROM data
-WHERE output_table_name IS NOT NULL
-  AND table_name IS NOT NULL;
+WITH data AS (
+SELECT 
+  table_method_list.table_method,
+  table_method_list.table_name,
+  gt_label_counts.gt_labels,
+  output_label_counts.output_labels,
+  label_true_positives.label_true_pos AS l_true_pos,
+  output_label_counts.output_labels - label_true_positives.label_true_pos AS l_false_pos,
+  gt_label_counts.gt_labels - label_true_positives.label_true_pos AS l_false_neg,
+  CASE 
+    -- Avoid divide by zero error if no output_labels
+    WHEN output_label_counts.output_labels=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (label_true_positives.label_true_pos::numeric/output_label_counts.output_labels)::numeric(4,3)
+  END AS l_precision,
+  CASE 
+    -- Avoid divide by zero error if no gt_labels
+    WHEN gt_label_counts.gt_labels=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (label_true_positives.label_true_pos::numeric/gt_label_counts.gt_labels)::numeric(4,3)
+  END AS l_recall
+FROM table_method_list
+  JOIN output_label_counts
+    ON table_method_list.table_name = output_label_counts.table_name
+    AND table_method_list.table_method = output_label_counts.table_method
+  JOIN gt_label_counts
+    ON table_method_list.table_name = gt_label_counts.table_name
+    AND table_method_list.table_method = gt_label_counts.table_method
+  JOIN label_true_positives
+    ON table_method_list.table_name = label_true_positives.table_name
+    AND table_method_list.table_method = label_true_positives.table_method
+ORDER BY table_method_list.table_method, table_method_list.table_name)
+SELECT 
+  -- Select all rows from subquery and calculate f-measure based on precision and recall
+  *,
+  CASE 
+    -- Avoid divide by zero error if no output_entry_labels
+    WHEN l_precision+l_recall=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (2*l_precision*l_recall/(l_precision+l_recall))::numeric(4,3)
+  END AS l_f_measure
+FROM data;
 
 ALTER VIEW label_confusion OWNER TO table_model;
 
-\echo Create entry_label_confusion view
--- Confusion matrix for the set of entry-label pairs per table and per model
+-- LABEL_LABEL_CONFUSION - views to display confusion matrix for set of label-label pairs
 
-CREATE OR REPLACE VIEW entry_label_confusion AS
-WITH gtelc AS
-(select table_name, count(*) AS gt_entry_label_count
-FROM gt_entry_label_set
-GROUP BY table_name),
-oelc AS
-(select table_name, table_method, count(*) AS output_entry_label_count
-FROM output_entry_label_set
-GROUP BY table_name, table_method),
-eltp AS
-(SELECT oel.table_name, oel.table_method, count(*) AS entry_label_true_pos
-FROM gt_entry_label_set gtel
-JOIN output_entry_label_set oel
-ON gtel.table_name=oel.table_name
-AND gtel.left_col=oel.left_col
-AND gtel.top_row=oel.top_row
-AND gtel.label=oel.label
---AND gtel.category_name=oel.category_name
-group by oel.table_name, oel.table_method)
-SELECT t2c.table_name,
-       t2c.table_method as method_name,
-       COALESCE(gtelc.gt_entry_label_count,0) AS gt_total_entry_labels,
-       COALESCE(oelc.output_entry_label_count,0) AS output_total_entry_labels,
-       COALESCE(oelc.output_entry_label_count,0)-COALESCE(eltp.entry_label_true_pos,0) AS entry_label_false_pos,
-       COALESCE(gtelc.gt_entry_label_count,0)-COALESCE(eltp.entry_label_true_pos,0) AS entry_label_false_neg,
-       COALESCE(eltp.entry_label_true_pos,0) AS entry_label_true_pos
-FROM tables_to_compare t2c	-- driving table for list of table_names
-LEFT JOIN gtelc ON t2c.table_name=gtelc.table_name
-LEFT JOIN oelc ON t2c.table_name=oelc.table_name AND t2c.table_method=oelc.table_method
-LEFT JOIN eltp ON t2c.table_name=eltp.table_name AND t2c.table_method=eltp.table_method
-ORDER BY table_name, method_name;
+\echo Create label_label_confusion view (and the views that are used to build it)
 
-ALTER VIEW entry_label_confusion OWNER TO table_model;
+-- One row per table and per method being compared
+-- Count is zero if no label-label pairs exist for given table
+CREATE OR REPLACE VIEW gt_label_label_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) filter( where gt_label_label_set.table_name is not null) AS gt_label_labels
+  FROM table_method_list   -- use table_method_list as driving table
+    LEFT JOIN gt_label_label_set -- ensures one row per table and per method
+      ON table_method_list.table_name = gt_label_label_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
 
-\echo Create label_label_confusion view
--- Confusion matrix for the set of label-label pairs per table and per model
+ALTER VIEW gt_label_label_counts OWNER TO table_model;
+
+-- One row per table and per method being compared. 
+-- Count is zero if no label-label pairs exist for given tbale nd method
+CREATE OR REPLACE VIEW output_label_label_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) filter( where output_label_label_set.table_name is not null) AS output_label_labels
+  FROM table_method_list       -- use table_method_list as driving table
+    LEFT JOIN output_label_label_set -- ensures one row per table and per method
+      ON table_method_list.table_name = output_label_label_set.table_name
+      AND table_method_list.table_method = output_label_label_set.table_method
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW output_label_label_counts OWNER TO table_model;
+
+-- Intersection of ground truth and output per table and per method
+CREATE OR REPLACE VIEW label_label_true_positives AS
+  SELECT
+    table_method_list.table_name, 
+    table_method_list.table_method, 
+    count(*) 
+      FILTER (
+        WHERE output_label_label_set.label = gt_label_label_set.label 
+        AND output_label_label_set.parent_label = gt_label_label_set.parent_label
+        AND output_label_label_set.left_col = gt_label_label_set.left_col
+        AND output_label_label_set.top_row = gt_label_label_set.top_row) 
+      AS label_label_true_pos
+  FROM table_method_list
+    FULL JOIN output_label_label_set
+      ON table_method_list.table_name = output_label_label_set.table_name
+      AND table_method_list.table_method = output_label_label_set.table_method
+    FULL JOIN gt_label_label_set 
+      ON table_method_list.table_name = gt_label_label_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW label_label_true_positives OWNER TO table_model;
 
 CREATE OR REPLACE VIEW label_label_confusion AS
-WITH gtllc AS
-(select table_name, count(*) AS gt_label_label_count
-FROM gt_label_label_set
-GROUP BY table_name),
-ollc AS
-(select table_name, table_method, count(*) AS output_label_label_count
-FROM output_entry_label_set
-GROUP BY table_name, table_method),
-lltp AS
-(SELECT oll.table_name, oll.table_method, count(*) AS label_label_true_pos
-FROM gt_label_label_set gtll
-JOIN output_label_label_set oll
-ON gtll.table_name=oll.table_name
-AND gtll.left_col=oll.left_col
-AND gtll.top_row=oll.top_row
-AND gtll.label=oll.label
---AND gtll.category_name=oll.category_name
-group by oll.table_name, oll.table_method)
-SELECT t2c.table_name,
-       t2c.table_method as method_name,
-       COALESCE(gtllc.gt_label_label_count,0) AS gt_total_label_labels,
-       COALESCE(ollc.output_label_label_count,0) AS output_total_label_labels,
-       COALESCE(ollc.output_label_label_count,0)-COALESCE(lltp.label_label_true_pos,0) AS label_label_false_pos,
-       COALESCE(gtllc.gt_label_label_count,0)-COALESCE(lltp.label_label_true_pos,0) AS label_label_false_neg,
-       COALESCE(lltp.label_label_true_pos,0) AS label_label_true_pos
-FROM tables_to_compare t2c	-- driving table for list of table_names
-LEFT JOIN gtllc ON t2c.table_name=gtllc.table_name
-LEFT JOIN ollc ON t2c.table_name=ollc.table_name AND t2c.table_method=ollc.table_method
-LEFT JOIN lltp ON t2c.table_name=lltp.table_name AND t2c.table_method=lltp.table_method
-ORDER BY table_name, method_name;
+WITH data AS (
+SELECT 
+  table_method_list.table_method,
+  table_method_list.table_name,
+  gt_label_label_counts.gt_label_labels,
+  output_label_label_counts.output_label_labels,
+  label_label_true_positives.label_label_true_pos AS ll_true_pos,
+  output_label_label_counts.output_label_labels - label_label_true_positives.label_label_true_pos AS ll_false_pos,
+  gt_label_label_counts.gt_label_labels - label_label_true_positives.label_label_true_pos AS ll_false_neg,
+  CASE 
+    -- Avoid divide by zero error if no output_label_labels
+    WHEN output_label_label_counts.output_label_labels=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (label_label_true_positives.label_label_true_pos::numeric/output_label_label_counts.output_label_labels)::numeric(4,3)
+  END AS ll_precision,
+  CASE 
+    -- Avoid divide by zero error if no gt_label_labels
+    WHEN gt_label_label_counts.gt_label_labels=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (label_label_true_positives.label_label_true_pos::numeric/gt_label_label_counts.gt_label_labels)::numeric(4,3)
+  END AS ll_recall
+FROM table_method_list
+  JOIN output_label_label_counts
+    ON table_method_list.table_name = output_label_label_counts.table_name
+    AND table_method_list.table_method = output_label_label_counts.table_method
+  JOIN gt_label_label_counts
+    ON table_method_list.table_name = gt_label_label_counts.table_name
+    AND table_method_list.table_method = gt_label_label_counts.table_method
+  JOIN label_label_true_positives
+    ON table_method_list.table_name = label_label_true_positives.table_name
+    AND table_method_list.table_method = label_label_true_positives.table_method
+ORDER BY table_method_list.table_method, table_method_list.table_name)
+SELECT 
+  -- Select all rows from subquery and calculate f-measure based on precision and recall
+  *,
+  CASE 
+    -- Avoid divide by zero error if no output_entry_labels
+    WHEN ll_precision+ll_recall=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (2*ll_precision*ll_recall/(ll_precision+ll_recall))::numeric(4,3)
+  END AS ll_f_measure
+FROM data;
 
 ALTER VIEW label_label_confusion OWNER TO table_model;
+
+
+
+-- ENTRY_LABEL_CONFUSION - views to display confusion matrix for set of entry-label pairs
+
+\echo Create entry_label_confusion view (and the views that are used to build it)
+
+-- One row per table and per method being compared
+-- Count is zero if no entry-label pairs exist for given table
+CREATE OR REPLACE VIEW gt_entry_label_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) filter( where gt_entry_label_set.table_name is not null) AS gt_entry_labels
+  FROM table_method_list   -- use table_method_list as driving table
+    LEFT JOIN gt_entry_label_set -- ensures one row per table and per method
+      ON table_method_list.table_name = gt_entry_label_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW gt_entry_label_counts OWNER TO table_model;
+
+-- One row per table and per method being compared. 
+-- Count is zero if no entry-label pairs exist for given tbale nd method
+CREATE OR REPLACE VIEW output_entry_label_counts AS 
+  SELECT 
+    table_method_list.table_name,
+    table_method_list.table_method,
+    count(*) filter( where output_entry_label_set.table_name is not null) AS output_entry_labels
+  FROM table_method_list       -- use table_method_list as driving table
+    LEFT JOIN output_entry_label_set -- ensures one row per table and per method
+      ON table_method_list.table_name = output_entry_label_set.table_name
+      AND table_method_list.table_method = output_entry_label_set.table_method
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW output_entry_label_counts OWNER TO table_model;
+
+-- Intersection of ground truth and output per table and per method
+CREATE OR REPLACE VIEW entry_label_true_positives AS
+  SELECT
+    table_method_list.table_name, 
+    table_method_list.table_method, 
+    count(*) 
+      FILTER (
+        -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
+        WHERE output_entry_label_set.label = gt_entry_label_set.label 
+        AND output_entry_label_set.entry = gt_entry_label_set.entry
+        AND output_entry_label_set.left_col = gt_entry_label_set.left_col
+        AND output_entry_label_set.top_row = gt_entry_label_set.top_row)  
+      AS entry_label_true_pos
+  FROM table_method_list
+    FULL JOIN output_entry_label_set
+      ON table_method_list.table_name = output_entry_label_set.table_name
+      AND table_method_list.table_method = output_entry_label_set.table_method
+    FULL JOIN gt_entry_label_set 
+      ON table_method_list.table_name = gt_entry_label_set.table_name
+  GROUP BY table_method_list.table_name, table_method_list.table_method;
+
+ALTER VIEW entry_label_true_positives OWNER TO table_model;
+
+CREATE OR REPLACE VIEW entry_label_confusion AS
+WITH data AS (
+SELECT 
+  table_method_list.table_method,
+  table_method_list.table_name,
+  gt_entry_label_counts.gt_entry_labels,
+  output_entry_label_counts.output_entry_labels,
+  entry_label_true_positives.entry_label_true_pos AS el_true_pos,
+  output_entry_label_counts.output_entry_labels - entry_label_true_positives.entry_label_true_pos AS el_false_pos,
+  gt_entry_label_counts.gt_entry_labels - entry_label_true_positives.entry_label_true_pos AS el_false_neg,
+  CASE 
+    -- Avoid divide by zero error if no output_entry_labels
+    WHEN output_entry_label_counts.output_entry_labels=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (entry_label_true_positives.entry_label_true_pos::numeric/output_entry_label_counts.output_entry_labels)::numeric(4,3)
+  END AS el_precision,
+  CASE 
+    -- Avoid divide by zero error if no gt_entry_labels
+    WHEN gt_entry_label_counts.gt_entry_labels=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (entry_label_true_positives.entry_label_true_pos::numeric/gt_entry_label_counts.gt_entry_labels)::numeric(4,3)
+  END AS el_recall
+FROM table_method_list
+  JOIN output_entry_label_counts
+    ON table_method_list.table_name = output_entry_label_counts.table_name
+    AND table_method_list.table_method = output_entry_label_counts.table_method
+  JOIN gt_entry_label_counts
+    ON table_method_list.table_name = gt_entry_label_counts.table_name
+    AND table_method_list.table_method = gt_entry_label_counts.table_method
+  JOIN entry_label_true_positives
+    ON table_method_list.table_name = entry_label_true_positives.table_name
+    AND table_method_list.table_method = entry_label_true_positives.table_method
+ORDER BY table_method_list.table_method, table_method_list.table_name)
+SELECT 
+  -- Select all rows from subquery and calculate f-measure based on precision and recall
+  *,
+  CASE 
+    -- Avoid divide by zero error if no output_entry_labels
+    WHEN el_precision+el_recall=0 THEN 0.000
+    -- Cast to numeric and round to 3 decimal places
+    ELSE (2*el_precision*el_recall/(el_precision+el_recall))::numeric(4,3)
+  END AS el_f_measure
+FROM data;
+
+ALTER VIEW entry_label_confusion OWNER TO table_model;
