@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls By Vessel Type, Port of Norfolk, VA: 2007",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,990,41,214,26,65,1336,
+,"Capacity (deadweight tons, thousands)",48892,1366,13367,904,3913,68442,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,

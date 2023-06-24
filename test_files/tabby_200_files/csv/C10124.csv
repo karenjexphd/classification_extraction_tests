@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls by Vessel Type, Port of Houston, TX: 2007",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,818,3757,800,399,421,6195,
+,"Capacity (deadweight tons, thousands)",34090,175784,32144,9653,15374,267045,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,

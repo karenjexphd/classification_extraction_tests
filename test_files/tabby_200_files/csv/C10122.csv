@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls By Vessel Type, Port of Philadelphia, PA: 2007",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,499,1646,352,420,231,3148,
+,"Capacity (deadweight tons, thousands)",15594,149269,14678,7779,4495,191814,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,

@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls By Vessel Type, Port of New York, 2003",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,2296,1319,339,156,743,4853,
+,"Capacity (deadweight tons, thousands)",103208,72835,13184,3091,162567,354885,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, October 2004.",,,,,,,

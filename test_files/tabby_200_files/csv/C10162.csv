@@ -1,0 +1,7 @@
+,Excel | CSV,,,,,,
+$START,,,,,,,
+,,1999,2000,2001,2002,2003,
+,Via truck,1112,1187,1123,1208,1163,
+,Via rail,160,181,151,149,150,
+,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Bureau of Transportation Statistics, based on data from U.S. Department of Homeland Security, Customs and Border Protection, Operations Management Database, 1999-2003.",,,,,,

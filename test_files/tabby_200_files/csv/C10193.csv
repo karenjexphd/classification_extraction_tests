@@ -1,0 +1,12 @@
+,North American Trade,,,,,,
+$START,,,,,,,
+,Rank,Commodity Code,Description,Total,Exports,Imports,
+,1,27,"Mineral fuels, oils and waxes",38256,1667,36589,
+,2,47,Pulp of wood or of other fibrous cellulosic material,137,0,137,
+,3,29,Organic chemicals,81,3.1,78,
+,4,28,"Inorganic chemicals,precious metals and radioactive elements",25,0.5,24,
+,5,25,"Salt; sulfur; earths and stone; plastering materials, lime and cement",1.2,1,0.2,
+,6,22,"Beverages, spirits and vinegar",0.2,0,0.2,
+,7,44,Wood and articles of wood; wood charcoal,0.1,0,0.1,
+,,,"Total, all commodities",38500,1671,36829,
+,,,,,,,$END

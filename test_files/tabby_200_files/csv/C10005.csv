@@ -1,0 +1,10 @@
+,"TABLE 4. Port Calls By Vessel Type, Port of New York/New Jersey: 2007",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,2549,1443,274,105,597,4968,
+,"Capacity (deadweight tons, thousands)",127359,77897,10788,1577,14805,232426,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,
+,,,,,,,,

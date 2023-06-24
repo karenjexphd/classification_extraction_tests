@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls by Vessel Type, Port of Charleston, SC: 2007",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,1589,169,92,80,230,2160,
+,"Capacity (deadweight tons, thousands)",76622,7707,4826,3135,4281,96571,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,

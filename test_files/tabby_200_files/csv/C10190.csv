@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls By Vessel Type, Port of Long Beach, CA: 2008",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,1484,1035,362,120,300,3301,
+,"Capacity (deadweight tons, thousands)",82203,113289,17898,3308,6084,222782,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,

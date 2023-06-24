@@ -1,0 +1,9 @@
+,"TABLE 4. Port Calls By Vessel Type, Port of Los Angeles, 2003",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,1658,244,189,98,170,2359,
+,"Capacity (deadweight tons, thousands)",83983,9735,8976,2615,3756,109065,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, October 2004.",,,,,,,

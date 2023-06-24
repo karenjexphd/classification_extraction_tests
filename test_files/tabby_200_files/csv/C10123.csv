@@ -1,0 +1,9 @@
+,"ABLE 4. Port Calls By Vessel Type, Port of Los Angeles, CA: 2008",,,,,,,
+,,,,,,,,
+,Excel | CSV,,,,,,,
+$START,,,,,,,,
+,,Container,Tanker,Dry bulk,General,Other,Total,
+,Calls,1574,302,122,119,74,2191,
+,"Capacity (deadweight tons, thousands)",87359,14863,5390,4206,1298,113116,
+,,,,,,,,$END
+,"SOURCE: U.S. Department of Transportation, Research and Innovative Technology Administration, Bureau of Transportation Statistics, based on data from Maritime Administration, special tabulation, July 20, 2009.",,,,,,,

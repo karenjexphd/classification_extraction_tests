@@ -257,13 +257,9 @@ $pg_conn_table_model -f EvaluateOutput/00_display_conf_matrix.sql
 for method in $methods
 do
   echo
-  echo INFO: Displaying results for $method
-  # execute relevant script in DisplayResults
+  echo INFO: Plotting results for $method
+  python3 ./utils/plot_results.py $outputdir $method
 done
-
-# Display results that compare the methods
-
-python3 ./utils/plot_results.py ${outputfiledir}/scatterplot.png
 
 # --------------------------------------------------------------------- #
 
