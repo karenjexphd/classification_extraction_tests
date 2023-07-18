@@ -9,9 +9,10 @@ mkdir /tmp/tabby_dockerfiles
 cp -r test_files /tmp/tabby_dockerfiles
 cd /tmp/tabby_dockerfiles
 
-# Clone TabbyXL repo
+# Clone tbbyxl (v1.1.1) and tabbyxl-dataset-v6 repos
 
 git clone git@github.com:karenjexphd/tabbyxl.git
+git clone git@github.com:karenjexphd/tabbyxl-dataset-v6.git
 
 # Create Dockerfile - image based on rockylinux 8
 
@@ -19,6 +20,7 @@ cat > Dockerfile << EOF
 FROM rockylinux:8
 WORKDIR /app
 COPY tabbyxl tabbyxl
+COPY tabbyxl-dataset-v6/results/crl2j/rules.crl rules.crl
 COPY test_files test_data
 RUN yum -y update
 RUN yum -y install git maven

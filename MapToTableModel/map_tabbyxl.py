@@ -12,7 +12,7 @@ import psycopg2
 input_filepath = str(sys.argv[1])               
 #   ii. input_filename       name of file to be processed (<filename>[_sheetnum]_[tablenum].xlsx)
 input_filename = str(sys.argv[2])               
-#   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if output 
+#   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if is is an output file 
 if str(sys.argv[3]) == 'TRUE':
     is_gt=True
 else:
@@ -34,11 +34,6 @@ tablenum=0
 # 2. Create connection to table_model database with search_path set to table_model
 #    (Need to parameterise this)
 
-# tm_conn = psycopg2.connect(
-#     host="p.qnplnpl3nbabto2zddq2phjlwi.db.postgresbridge.com",
-#     database="table_model",
-#     user="postgres")
-
 tm_conn = psycopg2.connect(
     host="127.0.0.1",
     database="table_model",
@@ -47,7 +42,7 @@ tm_conn = psycopg2.connect(
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
 
-# retrieve gt_table_id, tablestart_col and tablestart_row from source_table
+# retrieve existing data (table ID, table start/end col & row) from source_table for the file/sheet/table being processed
 
 select_stmt="SELECT table_id, \
                     table_start_col, \
@@ -63,9 +58,6 @@ cur.execute(select_stmt)
 
 table_info = cur.fetchone()
 
-# print('Table Info:')
-# print(table_info)
-
 gt_table_id    = table_info[0]
 tablestart_col = table_info[1]
 tablestart_row = table_info[2]
@@ -74,10 +66,13 @@ tableend_row   = table_info[4]
 
 if is_gt:
 
-    # If we're processing the ground truth file, just need to save gt_tble_id as table_id
+    # We're processing the ground truth file so source_table is already populated
+    # Set gt_table_id to table_id in preparation for populating the remaining tables
     table_id=gt_table_id
 
-else:       # we're processing the output file - need to populate source_table
+else:       
+    
+    # We're processing the output file so we need to populate source_table with the information just retrieved
 
     insert_stmt="INSERT INTO source_table ( \
                     table_is_gt, \
@@ -116,9 +111,9 @@ else:       # we're processing the output file - need to populate source_table
     table_id = table_info[0]
     print('table_id: '+str(table_id))
 
+# Continue to populate the table_model whether this is a ground truth or an output file
 
-# Use openpyxl load_workbook to load the input file as a workbook 
-# and get data from the required sheets (ENTRIES and LABELS):
+# Use openpyxl's load_workbook to load the file and get data from the ENTRIES and LABELS sheets:
 
 wb         = load_workbook(input_file)
 
@@ -128,16 +123,25 @@ ws_labels  = wb['LABELS']
 all_entries_rows = list(ws_entries.rows)
 all_labels_rows = list(ws_labels.rows)
 
-# Populate temporary tables entry_temp and entry_label_temp
-# from the rows in the ENTRIES sheet
-
-# Process each row from the ENTRIES sheet (all_entries_rows)
-# and insert the data into the temporary table entry_temp
+# Populate temporary tables entry_temp and entry_label_temp from rows in ENTRIES
 
 # NOTE: header row not processed - currently checking each row to see if it's the header - improve this!
 
 for row in all_entries_rows:
-    entry_val  = str(row[0].value)                            # value from ENTRY column
+    # get value from ENTRY column (row[0].value) as entry_val
+    try:
+        # attempt to convert value to float
+        if is_gt:
+          # if this is a GT file, remove spaces and replace comma with point before attempting to convert to float
+          entry_val  = float(row[0].value.replace(" ","").replace(",","."))
+        else:
+          # if this is an output file, remove thousand-separator commas before attempting to convert to float
+          entry_val  = float(row[0].value.replace(",",""))
+        entry_datatype='numeric'
+    except ValueError:
+        # if not possible to convert to float, return string value
+        entry_val  = str(row[0].value)
+        entry_datatype='text'
     entry_prov_text = str(row[1].value)                       # value from PROVENANCE column
     entry_labels = str(row[2].value)                          # value from LABELS column
     if entry_prov_text != 'PROVENANCE':                       # ignore header row
@@ -148,20 +152,19 @@ for row in all_entries_rows:
         entry_prov_col=''.join(filter(str.isalpha, entry_prov))        # alpha part
         entry_prov_row=int(''.join(filter(str.isdigit, entry_prov)))   # numeric part
 
-        # Have removed entry_labels from the following insert statement as the info is not used elsewhere
-
-        # insert_et="INSERT INTO entry_temp (entry_value, entry_provenance, entry_provenance_col, entry_provenance_row, entry_labels) \
-        #              VALUES ('"+entry_val+"', '"+entry_prov+"', '"+entry_prov_col+"', "+str(entry_prov_row)+", '"+entry_labels+"')"
+        # NOTE: Have removed entry_labels from the following insert statement as the info is not used elsewhere
 
         insert_et="INSERT INTO entry_temp (\
                     table_id, \
                     entry_value, \
+                    entry_datatype, \
                     entry_provenance, \
                     entry_provenance_col, \
                     entry_provenance_row) \
                    VALUES ( \
                     "+str(table_id)+", \
-                    '"+entry_val+"', \
+                    '"+str(entry_val)+"', \
+                    '"+entry_datatype+"', \
                     '"+entry_prov+"', \
                     '"+entry_prov_col+"', \
                     "+str(entry_prov_row)+")"
@@ -197,13 +200,14 @@ insert_stmt="INSERT INTO table_cell (\
                     right_col, \
                     bottom_row, \
                     cell_content, \
+                    cell_datatype, \
                     cell_annotation) \
             SELECT  "+str(table_id)+", \
                     ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
                     entry_provenance_row-"+str(tablestart_row)+", \
                     ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
                     entry_provenance_row-"+str(tablestart_row)+", \
-                    entry_value, 'DATA' \
+                    entry_value, entry_datatype, 'DATA' \
             FROM entry_temp WHERE table_id="+str(table_id)
 cur.execute(insert_stmt)
 

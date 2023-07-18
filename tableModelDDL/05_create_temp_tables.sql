@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS table_model.entry_temp 
 (table_id integer,
  entry_value text, 
+ entry_datatype text,
  entry_provenance text, 
  entry_provenance_col text, 
  entry_provenance_row integer, 
