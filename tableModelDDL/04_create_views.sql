@@ -124,6 +124,34 @@ ALTER VIEW hypoparsr_canonical_table_view OWNER TO table_model;
 
 -- 4. CREATE VIEWS TO SUPPORT EVALUATION
 
+-- 4.0 CREATE FUNCTION TO IDENTIFY MATCH BETWEEN TWO NUMERIC OR TEXT VALUES
+
+\echo Create function is_reconcilable()
+
+
+CREATE OR REPLACE FUNCTION is_reconcilable(val1 text, val2 text) RETURNS boolean
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT
+    AS
+    $BODY$
+    BEGIN
+      -- compare as numeric if the following rules are obeyed (note, these could be improved):
+      --   1. may or may not start with a minus sign
+      --   2. remaining string contains repetitions of: one or more characters 0-9 followed by 0 or one comma, full stop or space
+      -- in this case, strip the comma, full stop and space characters via regexp_replace(val1,'[,. ]','',gi)
+      --  and trim any trailing zeros via rtrim(string,'0')
+      -- then compare the resulting values 
+      -- this could of course result in false positives - 6430 would match 643 - but it is unlikely that we would compare two such numbers in the tests
+      IF val1 SIMILAR TO '-?([0-9]+[,. ]?)+' THEN
+        RETURN rtrim(regexp_replace(val1,'[,. ]','','gi'),'0') = rtrim(regexp_replace(val2,'[,. ]','','gi'),'0');
+      ELSE
+      -- otherwise compare as (case-insensitive) text
+        RETURN lower(val1) = lower(val2);
+      END IF;
+    END;    
+    $BODY$
+    LANGUAGE plpgsql;
+
 -- 4.1 CREATE VIEW TO IDENTIFY ASSOCIATED OUTPUT TABLE FOR EACH GROUND TRUTH TABLE
 
 \echo Create tables_to_compare view
@@ -347,7 +375,6 @@ CREATE OR REPLACE VIEW table_method_list AS
 
 ALTER VIEW table_method_list OWNER TO table_model;
 
-
 -- 4.3 CREATE VIEWS THAT RETURN THE CONFUSION MATRIX
 --     S for ground truth
 --     R for extracted tables
@@ -373,7 +400,7 @@ CREATE OR REPLACE VIEW gt_entry_counts AS
 ALTER VIEW gt_entry_counts OWNER TO table_model;
 
 -- One row per table and per method being compared. 
--- Count is zero if no entries exist for given tbale nd method
+-- Count is zero if no entries exist for given table nd method
 CREATE OR REPLACE VIEW output_entry_counts AS 
   SELECT 
     table_method_list.table_name,
@@ -388,6 +415,7 @@ CREATE OR REPLACE VIEW output_entry_counts AS
 ALTER VIEW output_entry_counts OWNER TO table_model;
 
 -- Intersection of ground truth and output per table and per method
+
 CREATE OR REPLACE VIEW entry_true_positives AS
   SELECT
     table_method_list.table_name, 
@@ -395,7 +423,8 @@ CREATE OR REPLACE VIEW entry_true_positives AS
     -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
     count(*) 
       FILTER (
-        WHERE output_entry_set.entry = gt_entry_set.entry
+        -- WHERE output_entry_set.entry = gt_entry_set.entry
+        WHERE is_reconcilable(output_entry_set.entry,gt_entry_set.entry)
         AND output_entry_set.left_col = gt_entry_set.left_col
         AND output_entry_set.top_row = gt_entry_set.top_row) 
       AS entry_true_pos
@@ -495,7 +524,8 @@ CREATE OR REPLACE VIEW label_true_positives AS
     table_method_list.table_method, 
     count(*) 
       FILTER (
-        WHERE output_label_set.label = gt_label_set.label
+        -- WHERE output_label_set.label = gt_label_set.label
+        WHERE is_reconcilable(output_label_set.label,gt_label_set.label)
         AND output_label_set.left_col = gt_label_set.left_col
         AND output_label_set.top_row = gt_label_set.top_row)  
       AS label_true_pos
@@ -595,8 +625,10 @@ CREATE OR REPLACE VIEW label_label_true_positives AS
     table_method_list.table_method, 
     count(*) 
       FILTER (
-        WHERE output_label_label_set.label = gt_label_label_set.label 
-        AND output_label_label_set.parent_label = gt_label_label_set.parent_label
+        -- WHERE output_label_label_set.label = gt_label_label_set.label 
+        -- AND output_label_label_set.parent_label = gt_label_label_set.parent_label
+        WHERE is_reconcilable(output_label_label_set.label, gt_label_label_set.label)
+        AND is_reconcilable (output_label_label_set.parent_label, gt_label_label_set.parent_label)
         AND output_label_label_set.left_col = gt_label_label_set.left_col
         AND output_label_label_set.top_row = gt_label_label_set.top_row) 
       AS label_label_true_pos
@@ -699,8 +731,10 @@ CREATE OR REPLACE VIEW entry_label_true_positives AS
     count(*) 
       FILTER (
         -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
-        WHERE output_entry_label_set.label = gt_entry_label_set.label 
-        AND output_entry_label_set.entry = gt_entry_label_set.entry
+        -- WHERE output_entry_label_set.label = gt_entry_label_set.label 
+        -- AND output_entry_label_set.entry = gt_entry_label_set.entry
+        WHERE is_reconcilable(output_entry_label_set.label, gt_entry_label_set.label)
+        AND is_reconcilable(output_entry_label_set.entry, gt_entry_label_set.entry)
         AND output_entry_label_set.left_col = gt_entry_label_set.left_col
         AND output_entry_label_set.top_row = gt_entry_label_set.top_row)  
       AS entry_label_true_pos

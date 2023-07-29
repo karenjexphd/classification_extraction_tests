@@ -9,10 +9,9 @@ mkdir /tmp/tabby_dockerfiles
 cp -r test_files /tmp/tabby_dockerfiles
 cd /tmp/tabby_dockerfiles
 
-# Clone tbbyxl (v1.1.1) and tabbyxl-dataset-v6 repos
+# Clone tbbyxl (v1.1.1) repo
 
 git clone git@github.com:karenjexphd/tabbyxl.git
-git clone git@github.com:karenjexphd/tabbyxl-dataset-v6.git
 
 # Create Dockerfile - image based on rockylinux 8
 
@@ -20,7 +19,6 @@ cat > Dockerfile << EOF
 FROM rockylinux:8
 WORKDIR /app
 COPY tabbyxl tabbyxl
-COPY tabbyxl-dataset-v6/results/crl2j/rules.crl rules.crl
 COPY test_files test_data
 RUN yum -y update
 RUN yum -y install git maven
@@ -29,11 +27,11 @@ RUN sed -i 's/java /java -Xmx1024m /' tabbyxl/test.sh
 RUN chmod +x tabbyxl/test.sh
 EOF
 
-# Build docker-tabby Docker image
+# Build docker-tabby-base Docker image
 docker build --tag docker-tabby-base .
 
 # Save image to Docker Hub
-docker tag docker-tabby karenjexphd/table_extraction_tests:docker-tabby-base
+docker tag docker-tabby-base karenjexphd/table_extraction_tests:docker-tabby-base
 docker push karenjexphd/table_extraction_tests:docker-tabby-base
 
 rm -rf /tmp/tabby_dockerfiles

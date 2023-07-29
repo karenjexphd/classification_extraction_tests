@@ -129,19 +129,7 @@ all_labels_rows = list(ws_labels.rows)
 
 for row in all_entries_rows:
     # get value from ENTRY column (row[0].value) as entry_val
-    try:
-        # attempt to convert value to float
-        if is_gt:
-          # if this is a GT file, remove spaces and replace comma with point before attempting to convert to float
-          entry_val  = float(row[0].value.replace(" ","").replace(",","."))
-        else:
-          # if this is an output file, remove thousand-separator commas before attempting to convert to float
-          entry_val  = float(row[0].value.replace(",",""))
-        entry_datatype='numeric'
-    except ValueError:
-        # if not possible to convert to float, return string value
-        entry_val  = str(row[0].value)
-        entry_datatype='text'
+    entry_val  = str(row[0].value)
     entry_prov_text = str(row[1].value)                       # value from PROVENANCE column
     entry_labels = str(row[2].value)                          # value from LABELS column
     if entry_prov_text != 'PROVENANCE':                       # ignore header row
@@ -157,14 +145,12 @@ for row in all_entries_rows:
         insert_et="INSERT INTO entry_temp (\
                     table_id, \
                     entry_value, \
-                    entry_datatype, \
                     entry_provenance, \
                     entry_provenance_col, \
                     entry_provenance_row) \
                    VALUES ( \
                     "+str(table_id)+", \
                     '"+str(entry_val)+"', \
-                    '"+entry_datatype+"', \
                     '"+entry_prov+"', \
                     '"+entry_prov_col+"', \
                     "+str(entry_prov_row)+")"
@@ -200,14 +186,13 @@ insert_stmt="INSERT INTO table_cell (\
                     right_col, \
                     bottom_row, \
                     cell_content, \
-                    cell_datatype, \
                     cell_annotation) \
             SELECT  "+str(table_id)+", \
                     ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
                     entry_provenance_row-"+str(tablestart_row)+", \
                     ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
                     entry_provenance_row-"+str(tablestart_row)+", \
-                    entry_value, entry_datatype, 'DATA' \
+                    entry_value, 'DATA' \
             FROM entry_temp WHERE table_id="+str(table_id)
 cur.execute(insert_stmt)
 

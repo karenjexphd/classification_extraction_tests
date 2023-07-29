@@ -1,0 +1,128 @@
+rule #1
+    when
+        cell c : rt > 1, cl > 1, !blank, text.matches("#|s")
+    then
+        set text "0" to c
+end
+
+rule #2
+    when
+        cell c : rt > 1, cl > 1, !blank, text.matches("F|\\.|\\.{2}+|\\.{3}+|\\u2026|\\u2014|x|-|NA")
+    then
+        set text null to c
+end
+
+rule #3
+    when
+        cell c : rt > 1, cl > 1, !blank, text.matches("(\\u2012|\\u2013|\\u2014|\\u2015|\\u002D|\\u2212|\\uFF0D)(\\d+(\\s|\\.|,)?\\d*)+(E|%|\\*)?"), t :text
+    then
+        set text "-".concat(t.substring(1)) to c
+end
+
+rule #4
+    when
+        cell c : rt == 1, cl > 1, !blank
+    then
+        set tag "ColumnHeading" to c
+        new label c
+end
+
+rule #5
+    when
+        cell c1 : tag == "ColumnHeading"
+        cell c2 : tag == null, rt > 1, cl > 1, !blank, rt == c1.rb + 1, (c1.cl <= cl && cr < c1.cr) || (c1.cl < cl  && cr <= c1.cr)
+    then
+        set tag "ColumnHeading" to c2
+        new label c2
+        set parent c1.label to c2.label
+end
+
+rule #6
+    when
+        cell c : rt > 1, cl == 1, !blank, tag == null
+    then
+        set tag "RowHeading" to c
+        new label c
+end
+
+rule #7
+    when
+        cell c0 : rt == 1, cl == 1, !blank
+        cell c1 : rt > 1, cl > 1, !blank, tag == null, !text.matches("(-|\\+|\\$)?(\\d+(\\s|\\.|,)?\\d*)+(E|%|\\*)?")
+        cell c2 : rt > 1, cl > 1, !blank, tag == null, cl <= c1.cl
+    then
+        set tag "RowHeading" to c2
+        new label c2
+end
+
+rule #8
+    when
+        cell c : cl > 1, rt > 1, !blank, tag == null
+    then
+        set tag "DataCell" to c
+        new entry c
+end
+
+rule #9
+    when
+        cell c : cl == 1, tag == "RowHeading", (int)text.charAt(0) == 45, t : text
+    then
+        set indent 2 to c
+end
+
+rule #10
+    when
+        cell c1 : cl == 1, tag == "RowHeading"
+        cell c2 : cl == 1, tag == "RowHeading", rt > c1.rt, indent == c1.indent + 2
+        no cells : cl == 1, tag == "RowHeading", indent == c1.indent, rt > c1.rt, rt < c2.rt
+    then
+        set parent c1.label to c2.label
+end
+
+rule #11
+    when
+        cell c1 : cl == 1, tag == "RowHeading", style.font.bold, indent == 0, !text.matches("(?i)(Total\\s*)|(I alt\\s*)|(All\\s*)")
+        cell c2 : cl == 1, tag == "RowHeading", rt > c1.rt, style.font.normal, indent == 0
+        no cells : cl == 1, tag == "RowHeading", style.font.bold, rt > c1.rt, rt < c2.rt, indent == 0
+    then
+        set parent c1.label to c2.label
+end
+
+rule #12
+    when
+        cell c : tag == "ColumnHeading"
+    then
+        set category "ColumnHeading" to c.label
+end
+
+rule #13
+    when
+        cell c1 : rt == 1, cl > 1, !blank, index: cl
+        cell c2 : tag == "RowHeading", cl == c1.cl
+    then
+        set category "RowHeading" + index to c2.label
+end
+
+rule #14
+    when
+        cell c1 : rt == 1, cl == 1
+        cell c2 : tag == "RowHeading", cl == 1
+    then
+        set category "RowHeading1" to c2.label
+end
+
+rule #15
+    when
+        cell c1 : tag == "ColumnHeading", label.terminal
+        cell c2 : tag == "DataCell", cl == c1.cl
+    then
+        add label c1.label to c2.entry
+end
+
+rule #16
+    when
+        cell c1 : tag == "RowHeading"
+        cell c2 : tag == "DataCell", rt == c1.rt
+    then
+        add label c1.label to c2.entry
+end

@@ -127,7 +127,7 @@ for col in df_columns:
                 label_provenance_col, \
                 label_category) \
                VALUES ( \
-                '"+str(col)+"', \
+                '"+str(col).replace("'","''")+"', \
                 "+str(heading_row)+", \
                 "+str(heading_col)+", \
                 'ColumnHeading')"
@@ -145,7 +145,7 @@ for row_id in range(num_rows):
   col_id=first_data_col               # reset col_id for each row
   for col in df_columns:
     cell=df.loc[row_id][col]
-    cell=str(cell).replace("'","''")   # cell value with single quotes escaped
+#    cell=str(cell).replace("'","''")   # cell value with single quotes escaped
     # print('row_id: '+str(row_id)+' cell: '+str(cell))
     insert_et="INSERT INTO entry_temp ( \
                 entry_value, \
@@ -153,10 +153,10 @@ for row_id in range(num_rows):
                 entry_provenance_col, \
                 entry_labels) \
                VALUES ( \
-                '"+str(cell)+"', \
+                '"+str(cell).replace("'","''")+"', \
                 "+str(row_id+first_data_row)+", \
                 "+str(col_id)+", \
-                '"+str(col)+"')"
+                '"+str(col).replace("'","''")+"')"
     cur.execute(insert_et)
     col_id+=1
 
