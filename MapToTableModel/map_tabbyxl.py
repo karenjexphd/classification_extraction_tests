@@ -155,11 +155,14 @@ for row in all_entries_rows:
                     '"+entry_prov_col+"', \
                     "+str(entry_prov_row)+")"
         cur.execute(insert_et)
-        # split entry_labels (on comma) to get list of labels for this entry
+        # split entry_labels (on comma surrounded by double quotes) to get list of labels for this entry
         entry_label_list = entry_labels.split('", "')
         for entry_label in entry_label_list:
-            # label_provenance is the cell reference found between square brackets
-            label_prov=entry_label.split('[')[1].split(']')[0]
+            # label_provenance is the cell reference found between square brackets IF THE LABEL IS NOT AN EMPTY STRING
+            if entry_label == '':
+                label_prov=''
+            else:
+              label_prov=entry_label.split('[')[1].split(']')[0]
             #print('table '+str(table_id)+' entry_label'+entry_label+' entry_prov '+entry_prov+' label_prov '+label_prov)
             # insert record into temp table entry_label_temp for this label
             insert_stmt_elt="INSERT INTO entry_label_temp (table_id, entry_provenance, label_provenance) \

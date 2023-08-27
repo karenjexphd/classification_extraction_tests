@@ -145,8 +145,10 @@ CREATE OR REPLACE FUNCTION is_reconcilable(val1 text, val2 text) RETURNS boolean
       IF val1 SIMILAR TO '-?([0-9]+[,. ]?)+' THEN
         RETURN rtrim(regexp_replace(val1,'[,. ]','','gi'),'0') = rtrim(regexp_replace(val2,'[,. ]','','gi'),'0');
       ELSE
-      -- otherwise compare as (case-insensitive) text
-        RETURN lower(val1) = lower(val2);
+      -- otherwise compare as text with the following conditions:
+      --  1. perform case-insensitive comparison
+      --  2. ignore leading spaces
+        RETURN lower(ltrim(val1)) = lower(ltrim(val2));
       END IF;
     END;    
     $BODY$

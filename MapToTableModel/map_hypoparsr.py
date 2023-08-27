@@ -147,6 +147,7 @@ for row_id in range(num_rows):
     cell=df.loc[row_id][col]
 #    cell=str(cell).replace("'","''")   # cell value with single quotes escaped
     # print('row_id: '+str(row_id)+' cell: '+str(cell))
+    # entry_value and entry_labels values have ' replaced with '' to escape single quotes
     insert_et="INSERT INTO entry_temp ( \
                 entry_value, \
                 entry_provenance_row, \
