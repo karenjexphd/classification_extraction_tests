@@ -1,133 +1,9 @@
--- 1. CREATE VIEWS SPECIFIC TO TABBYXL CANONICAL FORM
+-- Create functions and views to support evaluation (comparison of output against ground truth for each method)
 
-\echo Create view tabby_cell_view
-\echo Uses table_start to convert cell addresses to physical location in input file
-
-DROP VIEW IF EXISTS tabby_cell_view CASCADE;
-CREATE VIEW tabby_cell_view AS
-SELECT 
-  st.table_id,
-  tc.cell_id, 
-  'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row as cell_address, 
-  chr(ascii(st.table_start_col) + tc.left_col)||(st.table_start_row + tc.top_row) AS cell_provenance,
-  cell_content,
-  cell_annotation 
-FROM table_cell tc 
-JOIN source_table st
-ON   tc.table_id = st.table_id;
-
-ALTER VIEW tabby_cell_view OWNER TO table_model;
-
-\echo Create view tabby_entry_view
-
-DROP VIEW IF EXISTS tabby_entry_view;
-CREATE VIEW tabby_entry_view AS
-SELECT
-  cv.table_id,
-  cv.cell_id,
-  cv.cell_content as entry,
-  cv.cell_provenance as provenance
-FROM entry e
-JOIN tabby_cell_view cv
-ON   e.entry_cell_id = cv.cell_id;
-
-ALTER VIEW tabby_entry_view OWNER TO table_model;
-
-\echo Create view tabby_label_view
-
-DROP VIEW IF EXISTS tabby_label_view;
-CREATE VIEW tabby_label_view AS
-SELECT cv.table_id,
-    cv.cell_id AS label_cell_id,
-    cv.cell_content AS label_value,
-    CASE 
-      WHEN parent_cell.cell_content IS NOT NULL 
-      THEN (parent_cell.cell_content || ' | '::text) || cv.cell_content
-      ELSE cv.cell_content
-    END AS label_display_value,
-    cv.cell_provenance AS label_provenance,
-    l.category_name AS category,
-    parent_cell.cell_id AS parent_label_cell_id,
-    parent_cell.cell_content AS parent_label_value,
-    parent_cell.cell_provenance AS parent_label_provenance
-   FROM label l
-     JOIN tabby_cell_view cv ON l.label_cell_id = cv.cell_id
-     LEFT JOIN tabby_cell_view parent_cell ON l.parent_label_cell_id = parent_cell.cell_id;
-
-ALTER VIEW tabby_label_view OWNER TO table_model;
-
-\echo Create view tabby_entry_label_view
-
--- Based on entry_label, with additional information from table_cell
-
--- WHAT HAPPENED TO THE ENTRIES IN CATEGORY ColumnHeading ??
--- FIX THIS !!
-
-DROP VIEW IF EXISTS tabby_entry_label_view;
-CREATE VIEW tabby_entry_label_view AS
-SELECT
-  entry_cell.table_id,
-  entry_cell.cell_id as entry_cell_id,
-  entry_cell.cell_content as entry_value,
-  entry_cell.cell_provenance as entry_provenance,
-  label_cell.cell_id as label_cell_id,
-  label_cell.cell_content as label_value,
-  label_cell.cell_provenance as label_provenance,
-  tlv.label_display_value,
-  tlv.category
-FROM entry_label el
-JOIN tabby_cell_view entry_cell
-ON   el.entry_cell_id = entry_cell.cell_id
-JOIN tabby_label_view tlv            
-ON   el.label_cell_id = tlv.label_cell_id 
-JOIN tabby_cell_view label_cell
-ON   el.label_cell_id = label_cell.cell_id;
-
-ALTER VIEW tabby_entry_label_view OWNER TO table_model;
-
--- 2. CREATE VIEWS SPECIFIC TO PYTHEAS CANONICAL FORM
-
-\echo Create pytheas_canonical_table_view
-
-CREATE OR REPLACE VIEW pytheas_canonical_table_view
-AS
-SELECT st.table_id, st.file_name, st.table_number, tc.top_row AS table_row, st.table_start_row+tc.top_row AS row_provenance, tc.cell_annotation
-FROM source_table st 
-JOIN table_cell tc 
-ON st.table_id = tc.table_id
-ORDER BY cell_annotation DESC;
-
-ALTER VIEW pytheas_canonical_table_view OWNER TO table_model;
-
--- 3. CREATE VIEWS SPECIFIC TO HYPOPARSR CANONICAL FORM
-
--- TO DO: REPLACE table_row WITH ID OF ROW IN DATAFRAME (ie DELETE max(top_row) WHERE cell_annotation='HEADING')
-CREATE OR REPLACE VIEW hypoparsr_canonical_table_view
-AS
-SELECT st.table_id, 
-       st.file_name, 
-       st.table_number, 
-       col_headings.cell_content AS column_heading,
-       tc.top_row AS table_row,
-       tc.cell_content 
-FROM  source_table st 
-JOIN  table_cell tc 
-      ON st.table_id = tc.table_id
-JOIN  table_cell col_headings 
-      ON tc.table_id = col_headings.table_id
-      AND tc.left_col = col_headings.left_col
-WHERE tc.cell_annotation='DATA'
-AND   col_headings.cell_annotation='HEADING'
-ORDER BY 1, 2, 3, 5, 4;
-
-ALTER VIEW hypoparsr_canonical_table_view OWNER TO table_model;
-
--- 4. CREATE VIEWS TO SUPPORT EVALUATION
-
--- 4.0 CREATE FUNCTION TO IDENTIFY MATCH BETWEEN TWO NUMERIC OR TEXT VALUES
+-- 1. Create function to compare two values
 
 \echo Create function is_reconcilable()
-
+-- Boolean function that determines whether or not two given values match
 
 CREATE OR REPLACE FUNCTION is_reconcilable(val1 text, val2 text) RETURNS boolean
     IMMUTABLE
@@ -135,31 +11,37 @@ CREATE OR REPLACE FUNCTION is_reconcilable(val1 text, val2 text) RETURNS boolean
     AS
     $BODY$
     BEGIN
-      -- compare as numeric if the following rules are obeyed (note, these could be improved):
+      --  Replace any non-ascii characters in each value with a space:
+      val1 = regexp_replace(val1,'[^[:ascii:]]',' ','g');
+      val2 = regexp_replace(val1,'[^[:ascii:]]',' ','g');
+      --  Remove leading spaces from each vaue:
+      val1 = ltrim(val1);
+      val2 = ltrim(val2);
+      -- compare as numeric if the following rules are obeyed:
       --   1. may or may not start with a minus sign
       --   2. remaining string contains repetitions of: one or more characters 0-9 followed by 0 or one comma, full stop or space
-      -- in this case, strip the comma, full stop and space characters via regexp_replace(val1,'[,. ]','',gi)
-      --  and trim any trailing zeros via rtrim(string,'0')
-      -- then compare the resulting values 
-      -- this could of course result in false positives - 6430 would match 643 - but it is unlikely that we would compare two such numbers in the tests
       IF val1 SIMILAR TO '-?([0-9]+[,. ]?)+' THEN
-        RETURN rtrim(regexp_replace(val1,'[,. ]','','gi'),'0') = rtrim(regexp_replace(val2,'[,. ]','','gi'),'0');
+        -- compare as numeric
+        -- strip the comma, full stop and space characters:
+        val1 = regexp_replace(val1,'[,. ]','','gi');
+        val2 = regexp_replace(val2,'[,. ]','','gi');
+        -- trim any trailing zeros via rtrim(string,'0')
+        val1 = rtrim(val1,'0');
+        val2 = rtrim(val2,'0');
+        -- this could result in false positives - 6430 would match 643 - but it is unlikely that we would compare two such numbers in the tests
+        RETURN val1 = val2;
       ELSE
-      -- otherwise compare as text with the following conditions:
-      --  1. perform case-insensitive comparison
-      --  2. ignore leading spaces
-        RETURN lower(ltrim(val1)) = lower(ltrim(val2));
+        -- compare as text using case-insensitive comparison:
+        RETURN lower(val1) = lower(val2);
       END IF;
     END;    
     $BODY$
     LANGUAGE plpgsql;
 
--- 4.1 CREATE VIEW TO IDENTIFY ASSOCIATED OUTPUT TABLE FOR EACH GROUND TRUTH TABLE
+-- 2. Create view that lists each ground truth table with the associated output table for each method
 
 \echo Create tables_to_compare view
-
--- returns one row per table and per method containing
--- ground truth table_id and associated output table_id 
+-- Returns one row per table and per method that contains the ground truth table_id and associated output table_id 
 
 CREATE OR REPLACE VIEW tables_to_compare AS
 WITH 
@@ -234,6 +116,7 @@ ALTER VIEW output_label_set OWNER TO table_model;
 
 \echo Create gt_entry_set view
 -- for each table, return the "set of entries" from the ground truth
+-- if there are no entries for a given table, there will be no rows in gt_entry_set for that table
 
 CREATE OR REPLACE VIEW gt_entry_set AS
 SELECT 
@@ -252,6 +135,7 @@ ALTER VIEW gt_entry_set OWNER TO table_model;
 
 \echo Create output_entry_set view
 -- for each method, and for each table, return the extracted "set of entries"
+-- if there are no entries for a given table for a given method, there will be no rows in gt_entry_set for that table/method pair
 
 CREATE OR REPLACE VIEW output_entry_set AS
 SELECT 
@@ -419,24 +303,62 @@ ALTER VIEW output_entry_counts OWNER TO table_model;
 -- Intersection of ground truth and output per table and per method
 
 CREATE OR REPLACE VIEW entry_true_positives AS
-  SELECT
-    table_method_list.table_name, 
-    table_method_list.table_method, 
-    -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
-    count(*) 
-      FILTER (
-        -- WHERE output_entry_set.entry = gt_entry_set.entry
-        WHERE is_reconcilable(output_entry_set.entry,gt_entry_set.entry)
-        AND output_entry_set.left_col = gt_entry_set.left_col
-        AND output_entry_set.top_row = gt_entry_set.top_row) 
-      AS entry_true_pos
-  FROM table_method_list
-    FULL JOIN output_entry_set
-      ON table_method_list.table_name = output_entry_set.table_name
-      AND table_method_list.table_method = output_entry_set.table_method
-    FULL JOIN gt_entry_set 
-      ON table_method_list.table_name = gt_entry_set.table_name
-  GROUP BY table_method_list.table_name, table_method_list.table_method;
+SELECT 
+  table_method_list.table_name, 
+  table_method_list.table_method,
+  count(*) FILTER (
+    WHERE row_offset = coalesce(prev_row_offset, row_offset) 
+    AND row_offset = coalesce(next_row_offset, row_offset)
+    AND col_offset = coalesce(prev_col_offset, col_offset) 
+    AND col_offset = coalesce(next_col_offset, col_offset) ) AS entry_true_pos
+FROM (
+SELECT
+  output_entry_set.table_name,
+  output_entry_set.table_method,  
+  gt_entry_set.top_row AS gt_top_row,
+  gt_entry_set.left_col AS gt_left_col,
+  output_entry_set.top_row AS out_top_row,
+  output_entry_set.left_col AS out_left_col,
+  lag(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS prev_col_offset,
+  gt_entry_set.left_col - output_entry_set.left_col AS col_offset,
+  lead(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS next_col_offset,
+  lag(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS prev_row_offset,
+  gt_entry_set.top_row - output_entry_set.top_row AS row_offset,
+  lead(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS next_row_offset,
+  gt_entry_set.entry gt_entry,
+  output_entry_set.entry out_entry
+  FROM gt_entry_set 
+    JOIN output_entry_set 
+    ON is_reconcilable(gt_entry_set.entry, output_entry_set.entry)
+    AND gt_entry_set.table_name=output_entry_set.table_name
+WINDOW win_r AS (PARTITION BY gt_entry_set.top_row ORDER BY gt_entry_set.top_row, gt_entry_set.left_col),
+       win_c AS (PARTITION BY gt_entry_set.left_col ORDER BY gt_entry_set.left_col, gt_entry_set.top_row)
+) a
+FULL JOIN table_method_list
+  ON a.table_name = table_method_list.table_name
+  AND a.table_method = table_method_list.table_method
+GROUP BY table_method_list.table_method, table_method_list.table_name
+ORDER BY table_method_list.table_method, table_method_list.table_name;
+
+
+  -- SELECT
+  --   table_method_list.table_name, 
+  --   table_method_list.table_method, 
+  --   -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
+  --   count(*) 
+  --     FILTER (
+  --       -- WHERE output_entry_set.entry = gt_entry_set.entry
+  --       WHERE is_reconcilable(output_entry_set.entry,gt_entry_set.entry)
+  --       AND output_entry_set.left_col = gt_entry_set.left_col
+  --       AND output_entry_set.top_row = gt_entry_set.top_row) 
+  --     AS entry_true_pos
+  -- FROM table_method_list
+  --   FULL JOIN output_entry_set
+  --     ON table_method_list.table_name = output_entry_set.table_name
+  --     AND table_method_list.table_method = output_entry_set.table_method
+  --   FULL JOIN gt_entry_set 
+  --     ON table_method_list.table_name = gt_entry_set.table_name
+  -- GROUP BY table_method_list.table_name, table_method_list.table_method;
 
 ALTER VIEW entry_true_positives OWNER TO table_model;
 
@@ -521,23 +443,61 @@ ALTER VIEW output_label_counts OWNER TO table_model;
 
 -- Intersection of ground truth and output per table and per method
 CREATE OR REPLACE VIEW label_true_positives AS
-  SELECT
-    table_method_list.table_name, 
-    table_method_list.table_method, 
-    count(*) 
-      FILTER (
-        -- WHERE output_label_set.label = gt_label_set.label
-        WHERE is_reconcilable(output_label_set.label,gt_label_set.label)
-        AND output_label_set.left_col = gt_label_set.left_col
-        AND output_label_set.top_row = gt_label_set.top_row)  
-      AS label_true_pos
-  FROM table_method_list
-    FULL JOIN output_label_set
-      ON table_method_list.table_name = output_label_set.table_name
-      AND table_method_list.table_method = output_label_set.table_method
-    FULL JOIN gt_label_set 
-      ON table_method_list.table_name = gt_label_set.table_name
-  GROUP BY table_method_list.table_name, table_method_list.table_method;
+SELECT 
+  table_method_list.table_name, 
+  table_method_list.table_method,
+  count(*) FILTER (
+    WHERE row_offset = coalesce(prev_row_offset, row_offset) 
+    AND row_offset = coalesce(next_row_offset, row_offset)
+    AND col_offset = coalesce(prev_col_offset, col_offset) 
+    AND col_offset = coalesce(next_col_offset, col_offset) ) AS label_true_pos
+FROM (
+SELECT
+  output_label_set.table_name,
+  output_label_set.table_method,  
+  gt_label_set.top_row AS gt_top_row,
+  gt_label_set.left_col AS gt_left_col,
+  output_label_set.top_row AS out_top_row,
+  output_label_set.left_col AS out_left_col,
+  lag(gt_label_set.left_col - output_label_set.left_col) over win_c AS prev_col_offset,
+  gt_label_set.left_col - output_label_set.left_col AS col_offset,
+  lead(gt_label_set.left_col - output_label_set.left_col) over win_c AS next_col_offset,
+  lag(gt_label_set.top_row - output_label_set.top_row) over win_r AS prev_row_offset,
+  gt_label_set.top_row - output_label_set.top_row AS row_offset,
+  lead(gt_label_set.top_row - output_label_set.top_row) over win_r AS next_row_offset,
+  gt_label_set.label gt_label,
+  output_label_set.label out_label
+  FROM gt_label_set 
+    JOIN output_label_set 
+    ON is_reconcilable(gt_label_set.label, output_label_set.label)
+    AND gt_label_set.table_name=output_label_set.table_name
+WINDOW win_r AS (PARTITION BY gt_label_set.top_row ORDER BY gt_label_set.top_row, gt_label_set.left_col),
+       win_c AS (PARTITION BY gt_label_set.left_col ORDER BY gt_label_set.left_col, gt_label_set.top_row)
+) a
+FULL JOIN table_method_list
+  ON a.table_name = table_method_list.table_name
+  AND a.table_method = table_method_list.table_method
+GROUP BY table_method_list.table_method, table_method_list.table_name
+ORDER BY table_method_list.table_method, table_method_list.table_name;
+
+
+  -- SELECT
+  --   table_method_list.table_name, 
+  --   table_method_list.table_method, 
+  --   count(*) 
+  --     FILTER (
+  --       -- WHERE output_label_set.label = gt_label_set.label
+  --       WHERE is_reconcilable(output_label_set.label,gt_label_set.label)
+  --       AND output_label_set.left_col = gt_label_set.left_col
+  --       AND output_label_set.top_row = gt_label_set.top_row)  
+  --     AS label_true_pos
+  -- FROM table_method_list
+  --   FULL JOIN output_label_set
+  --     ON table_method_list.table_name = output_label_set.table_name
+  --     AND table_method_list.table_method = output_label_set.table_method
+  --   FULL JOIN gt_label_set 
+  --     ON table_method_list.table_name = gt_label_set.table_name
+  -- GROUP BY table_method_list.table_name, table_method_list.table_method;
 
 ALTER VIEW label_true_positives OWNER TO table_model;
 
