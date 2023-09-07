@@ -13,7 +13,7 @@ CREATE OR REPLACE FUNCTION is_reconcilable(val1 text, val2 text) RETURNS boolean
     BEGIN
       --  Replace any non-ascii characters in each value with a space:
       val1 = regexp_replace(val1,'[^[:ascii:]]',' ','g');
-      val2 = regexp_replace(val1,'[^[:ascii:]]',' ','g');
+      val2 = regexp_replace(val2,'[^[:ascii:]]',' ','g');
       --  Remove leading spaces from each vaue:
       val1 = ltrim(val1);
       val2 = ltrim(val2);
@@ -310,43 +310,56 @@ ALTER VIEW output_entry_counts OWNER TO table_model;
 -- Number of matches between ground truth and output per table and per method
 
 CREATE OR REPLACE VIEW entry_true_positives AS
-SELECT 
-  table_method_list.table_name, 
-  table_method_list.table_method,
-  count(*) FILTER (
-    WHERE row_offset = coalesce(prev_row_offset, row_offset) 
-    AND row_offset = coalesce(next_row_offset, row_offset)
-    AND col_offset = coalesce(prev_col_offset, col_offset) 
-    AND col_offset = coalesce(next_col_offset, col_offset) ) AS entry_true_pos
-FROM (
-SELECT
-  output_entry_set.table_name,
-  output_entry_set.table_method,  
-  gt_entry_set.top_row AS gt_top_row,
-  gt_entry_set.left_col AS gt_left_col,
-  output_entry_set.top_row AS out_top_row,
-  output_entry_set.left_col AS out_left_col,
-  lag(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS prev_col_offset,
-  gt_entry_set.left_col - output_entry_set.left_col AS col_offset,
-  lead(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS next_col_offset,
-  lag(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS prev_row_offset,
-  gt_entry_set.top_row - output_entry_set.top_row AS row_offset,
-  lead(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS next_row_offset,
-  gt_entry_set.entry gt_entry,
-  output_entry_set.entry out_entry
-  FROM gt_entry_set 
-    JOIN output_entry_set 
-    ON is_reconcilable(gt_entry_set.entry, output_entry_set.entry)
-    AND gt_entry_set.table_name=output_entry_set.table_name
-WINDOW win_r AS (PARTITION BY gt_entry_set.top_row ORDER BY gt_entry_set.top_row, gt_entry_set.left_col),
-       win_c AS (PARTITION BY gt_entry_set.left_col ORDER BY gt_entry_set.left_col, gt_entry_set.top_row)
-) a
-RIGHT JOIN table_method_list
-  ON a.table_name = table_method_list.table_name
-  AND a.table_method = table_method_list.table_method
-GROUP BY table_method_list.table_method, table_method_list.table_name
-ORDER BY table_method_list.table_method, table_method_list.table_name;
-
+  SELECT
+    table_method_list.table_name, 
+    table_method_list.table_method,
+    count(*) FILTER (
+              -- only count rows where the row offset between GT and output is consistent
+              WHERE row_offset = coalesce(prev_row_offset, row_offset) 
+              AND row_offset = coalesce(next_row_offset, row_offset)
+              -- only count rows where the row offset between GT and output is consistent
+              AND col_offset = coalesce(prev_col_offset, col_offset) 
+              AND col_offset = coalesce(next_col_offset, col_offset) )
+        AS entry_true_pos
+  FROM (
+  SELECT
+    output_entry_set.table_name,
+    output_entry_set.table_method,  
+    gt_entry_set.top_row AS gt_top_row,
+    gt_entry_set.left_col AS gt_left_col,
+    output_entry_set.top_row AS out_top_row,
+    output_entry_set.left_col AS out_left_col,
+    lag(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS prev_col_offset,
+    gt_entry_set.left_col - output_entry_set.left_col AS col_offset,
+    lead(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS next_col_offset,
+    lag(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS prev_row_offset,
+    gt_entry_set.top_row - output_entry_set.top_row AS row_offset,
+    lead(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS next_row_offset,
+    gt_entry_set.entry gt_entry,
+    output_entry_set.entry out_entry
+    FROM gt_entry_set 
+      JOIN output_entry_set 
+      -- join rows on entry value and table_name - will get a row per table, per method and per entry value
+      ON is_reconcilable(gt_entry_set.entry, output_entry_set.entry)
+      AND gt_entry_set.table_name=output_entry_set.table_name
+  WINDOW  win_r AS (
+            -- window for comparing row offsets
+            PARTITION BY output_entry_set.table_method,
+                         output_entry_set.table_name
+            ORDER BY     gt_entry_set.top_row, 
+                         gt_entry_set.left_col),
+          win_c AS (
+            -- window for comparing column offsets
+            PARTITION BY output_entry_set.table_method,
+                         output_entry_set.table_name
+            ORDER BY     gt_entry_set.left_col, 
+                         gt_entry_set.top_row)
+  ) matching_entry_values
+  RIGHT JOIN table_method_list
+    ON matching_entry_values.table_name = table_method_list.table_name
+    AND matching_entry_values.table_method = table_method_list.table_method
+  GROUP BY table_method_list.table_method, table_method_list.table_name
+  ORDER BY table_method_list.table_method, table_method_list.table_name;
 
 ALTER VIEW entry_true_positives OWNER TO table_model;
 
@@ -378,7 +391,7 @@ FROM table_method_list
     AND table_method_list.table_method = output_entry_counts.table_method
   JOIN gt_entry_counts
     ON table_method_list.table_name = gt_entry_counts.table_name
-    AND table_method_list.table_method = gt_entry_counts.table_method
+--    AND table_method_list.table_method = gt_entry_counts.table_method
   JOIN entry_true_positives
     ON table_method_list.table_name = entry_true_positives.table_name
     AND table_method_list.table_method = entry_true_positives.table_method
