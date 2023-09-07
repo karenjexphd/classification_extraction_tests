@@ -70,10 +70,9 @@ ORDER BY table_method, gt_table_id;
 
 ALTER VIEW tables_to_compare OWNER TO table_model;
 
--- 4.2 CREATE VIEWS THAT RETURN THE 'SET OF INSTANCES'
---     S for ground truth
---     R for extracted tables
---     views are based on tables_to_compare view
+-- 3 Create views that return the 'set of instances' 
+--     i.e. the set of entries, set of labels, set of entry-label pairs or set of label-label pairs
+--     if a given set is empty for a given table, the view will return no rows for that table
 
 \echo Create gt_label_set view
 -- for each table, return the "set of labels" from the ground truth
@@ -116,7 +115,6 @@ ALTER VIEW output_label_set OWNER TO table_model;
 
 \echo Create gt_entry_set view
 -- for each table, return the "set of entries" from the ground truth
--- if there are no entries for a given table, there will be no rows in gt_entry_set for that table
 
 CREATE OR REPLACE VIEW gt_entry_set AS
 SELECT 
@@ -135,7 +133,6 @@ ALTER VIEW gt_entry_set OWNER TO table_model;
 
 \echo Create output_entry_set view
 -- for each method, and for each table, return the extracted "set of entries"
--- if there are no entries for a given table for a given method, there will be no rows in gt_entry_set for that table/method pair
 
 CREATE OR REPLACE VIEW output_entry_set AS
 SELECT 
@@ -243,11 +240,11 @@ WHERE NOT source_table.table_is_gt;
 
 ALTER VIEW output_label_label_set OWNER TO table_model;
 
+-- 4. Create view containing list of tables and methods to be compared 
 
--- definitive list of tables and methods to be compared
--- one row per table and per method
-
--- THERE MUST BE A BETTER WAY TO DO THIS !
+\echo Create table_method_list view
+-- return one row per table and per method found in source_table
+-- should probably populate this directly during processing of the input files
 
 CREATE OR REPLACE VIEW table_method_list AS
     WITH 
@@ -261,46 +258,56 @@ CREATE OR REPLACE VIEW table_method_list AS
 
 ALTER VIEW table_method_list OWNER TO table_model;
 
--- 4.3 CREATE VIEWS THAT RETURN THE CONFUSION MATRIX
---     S for ground truth
---     R for extracted tables
+-- 5 Create views that calculate and display the confusion matrix
 --     views are based on the gt_<instance>_set and output_<instance>_set views
 
+-- 5.1 entry_confusion - views to display confusion matrix for set of entries
 
--- ENTRY_CONFUSION - views to display confusion matrix for set of entries
+\echo Create gt_entry_counts view
+-- One row per table. Count is zero if no entries exist for given table
 
-\echo Create entry_confusion view (and the views that are used to build it)
-
--- One row per table and per method being compared
--- Count is zero if no entries exist for given table
 CREATE OR REPLACE VIEW gt_entry_counts AS 
   SELECT 
-    table_method_list.table_name,
-    table_method_list.table_method,
+    table_list.table_name,
     count(*) FILTER( WHERE gt_entry_set.table_name is not null) AS gt_entries
-  FROM table_method_list   -- use table_method_list as driving table
+  FROM (select distinct table_name from table_method_list) as table_list   -- use table_method_list as driving table
     LEFT JOIN gt_entry_set -- ensures one row per table and per method
-      ON table_method_list.table_name = gt_entry_set.table_name
-  GROUP BY table_method_list.table_name, table_method_list.table_method;
+      ON table_list.table_name = gt_entry_set.table_name
+  GROUP BY table_list.table_name;
+
+-- ** WHY DID I INCLUDE table_method IN gt_entry_counts? **
+
+  -- SELECT 
+  --   table_method_list.table_name,
+  --   table_method_list.table_method,
+  --   count(*) FILTER( WHERE gt_entry_set.table_name is not null) AS gt_entries
+  -- FROM table_method_list   -- use table_method_list as driving table
+  --   LEFT JOIN gt_entry_set -- ensures one row per table and per method
+  --     ON table_method_list.table_name = gt_entry_set.table_name
+  -- GROUP BY table_method_list.table_name, table_method_list.table_method;
 
 ALTER VIEW gt_entry_counts OWNER TO table_model;
 
--- One row per table and per method being compared. 
--- Count is zero if no entries exist for given table nd method
+
+\echo Create gt_entry_counts view
+-- One row per table and per method being compared. Count is zero if no entries exist for given table and method
+
 CREATE OR REPLACE VIEW output_entry_counts AS 
   SELECT 
     table_method_list.table_name,
     table_method_list.table_method,
     count(*) FILTER( WHERE output_entry_set.table_name is not null) AS output_entries
   FROM table_method_list       -- use table_method_list as driving table
-    FULL JOIN output_entry_set -- ensures one row per table and per method
+    LEFT JOIN output_entry_set -- ensures one row per table and per method
       ON  table_method_list.table_name = output_entry_set.table_name
       AND table_method_list.table_method = output_entry_set.table_method
   GROUP BY table_method_list.table_name, table_method_list.table_method;
 
 ALTER VIEW output_entry_counts OWNER TO table_model;
 
--- Intersection of ground truth and output per table and per method
+
+\echo Create entry_true_positives view
+-- Number of matches between ground truth and output per table and per method
 
 CREATE OR REPLACE VIEW entry_true_positives AS
 SELECT 
@@ -334,31 +341,12 @@ SELECT
 WINDOW win_r AS (PARTITION BY gt_entry_set.top_row ORDER BY gt_entry_set.top_row, gt_entry_set.left_col),
        win_c AS (PARTITION BY gt_entry_set.left_col ORDER BY gt_entry_set.left_col, gt_entry_set.top_row)
 ) a
-FULL JOIN table_method_list
+RIGHT JOIN table_method_list
   ON a.table_name = table_method_list.table_name
   AND a.table_method = table_method_list.table_method
 GROUP BY table_method_list.table_method, table_method_list.table_name
 ORDER BY table_method_list.table_method, table_method_list.table_name;
 
-
-  -- SELECT
-  --   table_method_list.table_name, 
-  --   table_method_list.table_method, 
-  --   -- NB MAY WANT TO ADD MATCH ON left_col AND top_row
-  --   count(*) 
-  --     FILTER (
-  --       -- WHERE output_entry_set.entry = gt_entry_set.entry
-  --       WHERE is_reconcilable(output_entry_set.entry,gt_entry_set.entry)
-  --       AND output_entry_set.left_col = gt_entry_set.left_col
-  --       AND output_entry_set.top_row = gt_entry_set.top_row) 
-  --     AS entry_true_pos
-  -- FROM table_method_list
-  --   FULL JOIN output_entry_set
-  --     ON table_method_list.table_name = output_entry_set.table_name
-  --     AND table_method_list.table_method = output_entry_set.table_method
-  --   FULL JOIN gt_entry_set 
-  --     ON table_method_list.table_name = gt_entry_set.table_name
-  -- GROUP BY table_method_list.table_name, table_method_list.table_method;
 
 ALTER VIEW entry_true_positives OWNER TO table_model;
 
