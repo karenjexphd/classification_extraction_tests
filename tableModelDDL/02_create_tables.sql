@@ -31,6 +31,17 @@ COMMENT ON COLUMN table_model.source_table.table_end_row IS 'position of row dir
 COMMENT ON COLUMN table_model.source_table.table_is_gt IS 'TRUE if this row represents the ground truth for the table';
 COMMENT ON COLUMN table_model.source_table.table_method IS 'name of the method used to extract the table, or if table_is_gt is TRUE, the method associated with the data set';
 
+-- May need some indexes for performance. Not sure yet if these will help
+
+-- CREATE INDEX source_table_table_name 
+-- ON source_table (((((source_table.file_name || '_'::text) || (source_table.sheet_number)::text) || '_'::text) || (source_table.table_number)::text));
+
+-- CREATE INDEX source_table_table_is_gt 
+-- ON source_table (table_is_gt);
+
+-- CREATE INDEX source_table_table_method
+-- ON source_table (table_method);
+
 \echo Create table table_cell
 
 CREATE TABLE IF NOT EXISTS table_model.table_cell
