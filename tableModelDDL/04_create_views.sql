@@ -80,6 +80,7 @@ ALTER VIEW tables_to_compare OWNER TO table_model;
 CREATE OR REPLACE VIEW gt_label_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
+  table_cell.cell_id,
   table_cell.left_col, 
   table_cell.top_row, 
   label.category_name, 
@@ -98,19 +99,57 @@ ALTER VIEW gt_label_set OWNER TO table_model;
 -- for each method, and for each table, return the extracted "set of labels"
 
 CREATE OR REPLACE VIEW output_label_set AS
+WITH hypoparsr_base_labels AS (
+    -- list of labels in hypoparsr output with no .n suffix (where n is one or more numeric characters)
+    SELECT 
+    source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS base_label_table_name, 
+    table_cell.cell_content AS base_label
+    FROM source_table 
+    JOIN table_cell
+        ON source_table.table_id = table_cell.table_id
+    JOIN label
+        ON label.label_cell_id = table_cell.cell_id
+    WHERE   source_table.table_method='hypoparsr'
+    AND     table_cell.cell_content = regexp_replace(table_cell.cell_content,'[.][0-9]+$','') 
+    AND NOT source_table.table_is_gt
+    )
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
   source_table.table_method,
+  table_cell.cell_id,
   table_cell.left_col, 
   table_cell.top_row, 
-  label.category_name, 
-  table_cell.cell_content AS label
+  label.category_name,
+  CASE 
+    -- for hypoparsr only: if a corresponding label without a suffix exists, return the label with the suffix removed
+    WHEN (regexp_replace(table_cell.cell_content,'[.][0-9]+$','')  IN (SELECT base_label from hypoparsr_base_labels WHERE base_label_table_name=source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number)
+    AND table_method = 'hypoparsr')
+    THEN regexp_replace(table_cell.cell_content,'[.][0-9]+$','')  
+    -- otherwise return the unchanged label value
+    ELSE table_cell.cell_content
+  END AS label
 FROM source_table 
   JOIN table_cell
     ON source_table.table_id = table_cell.table_id
   JOIN label
     ON label.label_cell_id = table_cell.cell_id
 WHERE NOT source_table.table_is_gt;
+
+-- CREATE OR REPLACE VIEW output_label_set AS
+-- SELECT 
+--   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
+--   source_table.table_method,
+--   table_cell.cell_id,
+--   table_cell.left_col, 
+--   table_cell.top_row, 
+--   label.category_name, 
+--   table_cell.cell_content AS label
+-- FROM source_table 
+--   JOIN table_cell
+--     ON source_table.table_id = table_cell.table_id
+--   JOIN label
+--     ON label.label_cell_id = table_cell.cell_id
+-- WHERE NOT source_table.table_is_gt;
 
 ALTER VIEW output_label_set OWNER TO table_model;
 
@@ -120,6 +159,7 @@ ALTER VIEW output_label_set OWNER TO table_model;
 CREATE OR REPLACE VIEW gt_entry_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
+  table_cell.cell_id,
   table_cell.left_col, 
   table_cell.top_row, 
   table_cell.cell_content AS entry 
@@ -139,6 +179,7 @@ CREATE OR REPLACE VIEW output_entry_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
   source_table.table_method,
+  table_cell.cell_id,
   table_cell.left_col, 
   table_cell.top_row, 
   table_cell.cell_content AS entry 
@@ -157,9 +198,11 @@ ALTER VIEW output_entry_set OWNER TO table_model;
 CREATE OR REPLACE VIEW gt_entry_label_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
+  entry_table_cell.cell_id entry_cell_id,
   entry_table_cell.left_col, 
   entry_table_cell.top_row, 
   entry_table_cell.cell_content AS entry, 
+  label_table_cell.cell_id label_cell_id,
   label_table_cell.cell_content AS label
 FROM source_table
   JOIN table_cell entry_table_cell
@@ -180,8 +223,10 @@ CREATE OR REPLACE VIEW output_entry_label_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
   source_table.table_method,
+  entry_table_cell.cell_id entry_cell_id,
   entry_table_cell.left_col, 
   entry_table_cell.top_row, 
+  label_table_cell.cell_id label_cell_id,
   entry_table_cell.cell_content AS entry, 
   label_table_cell.cell_content AS label
 FROM source_table
@@ -202,9 +247,11 @@ ALTER VIEW output_entry_label_set OWNER TO table_model;
 CREATE OR REPLACE VIEW gt_label_label_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
+  label_table_cell.cell_id label_cell_id,
   label_table_cell.left_col, 
   label_table_cell.top_row, 
   label_table_cell.cell_content AS label, 
+  parent_label_table_cell.cell_id parent_label_cell_id,
   parent_label_table_cell.cell_content as parent_label
 FROM source_table
   JOIN table_cell label_table_cell
@@ -225,9 +272,11 @@ CREATE OR REPLACE VIEW output_label_label_set AS
 SELECT 
   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
   source_table.table_method,
+  label_table_cell.cell_id label_cell_id,
   label_table_cell.left_col, 
   label_table_cell.top_row, 
   label_table_cell.cell_content AS label, 
+  parent_label_table_cell.cell_id parent_label_cell_id,
   parent_label_table_cell.cell_content AS parent_label
 FROM source_table
   JOIN table_cell label_table_cell
@@ -542,26 +591,26 @@ FROM data;
 
 ALTER VIEW label_confusion OWNER TO table_model;
 
--- LABEL_LABEL_CONFUSION - views to display confusion matrix for set of label-label pairs
+-- 5.3 label_label_confusion - views to display confusion matrix for set of labels
 
-\echo Create label_label_confusion view (and the views that are used to build it)
+\echo Create gt_label_label_counts view
+-- One row per table. Count is zero if no label-label pairs exist for given table
 
--- One row per table and per method being compared
--- Count is zero if no label-label pairs exist for given table
 CREATE OR REPLACE VIEW gt_label_label_counts AS 
   SELECT 
     table_method_list.table_name,
-    table_method_list.table_method,
     count(*) filter( where gt_label_label_set.table_name is not null) AS gt_label_labels
   FROM table_method_list   -- use table_method_list as driving table
-    LEFT JOIN gt_label_label_set -- ensures one row per table and per method
+    LEFT JOIN gt_label_label_set -- ensures one row per table
       ON table_method_list.table_name = gt_label_label_set.table_name
-  GROUP BY table_method_list.table_name, table_method_list.table_method;
+  GROUP BY table_method_list.table_name;
 
 ALTER VIEW gt_label_label_counts OWNER TO table_model;
 
--- One row per table and per method being compared. 
--- Count is zero if no label-label pairs exist for given tbale nd method
+
+\echo Create output_label_label_counts view
+-- One row per table and per method being compared. Count is zero if no label label pairs exist for given table and method
+
 CREATE OR REPLACE VIEW output_label_label_counts AS 
   SELECT 
     table_method_list.table_name,
@@ -646,27 +695,26 @@ FROM data;
 ALTER VIEW label_label_confusion OWNER TO table_model;
 
 
+-- 5.4 entry_label_confusion - views to display confusion matrix for set of entry-label pairs
 
--- ENTRY_LABEL_CONFUSION - views to display confusion matrix for set of entry-label pairs
+\echo Create gt_entry_label_counts view
+-- One row per table. Count is zero if no entry label pairs exist for given table
 
-\echo Create entry_label_confusion view (and the views that are used to build it)
-
--- One row per table and per method being compared
--- Count is zero if no entry-label pairs exist for given table
 CREATE OR REPLACE VIEW gt_entry_label_counts AS 
   SELECT 
     table_method_list.table_name,
-    table_method_list.table_method,
     count(*) filter( where gt_entry_label_set.table_name is not null) AS gt_entry_labels
   FROM table_method_list   -- use table_method_list as driving table
     LEFT JOIN gt_entry_label_set -- ensures one row per table and per method
       ON table_method_list.table_name = gt_entry_label_set.table_name
-  GROUP BY table_method_list.table_name, table_method_list.table_method;
+  GROUP BY table_method_list.table_name;
 
 ALTER VIEW gt_entry_label_counts OWNER TO table_model;
 
--- One row per table and per method being compared. 
--- Count is zero if no entry-label pairs exist for given tbale nd method
+
+\echo Create output_entry_label_counts view
+-- One row per table and per method being compared. Count is zero if no entry label pairs exist for given table and method
+
 CREATE OR REPLACE VIEW output_entry_label_counts AS 
   SELECT 
     table_method_list.table_name,
