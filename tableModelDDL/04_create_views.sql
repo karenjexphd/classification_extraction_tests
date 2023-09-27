@@ -1,4 +1,103 @@
--- Create functions and views to support evaluation (comparison of output against ground truth for each method)
+
+/* ------------------------------------------------------------------------------------------------------------ */
+/*          Create views to support mapping Ground Truth and Output to the (TabbyXL-based) table model          */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+-- 1. Create tabby_cell_view
+
+\echo Create view tabby_cell_view
+-- Uses table_start to convert cell addresses to physical location in input file
+
+DROP VIEW IF EXISTS tabby_cell_view CASCADE;
+CREATE VIEW tabby_cell_view AS
+SELECT 
+  st.table_id,
+  tc.cell_id, 
+  'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row as cell_address, 
+  chr(ascii(st.table_start_col) + tc.left_col)||(st.table_start_row + tc.top_row) AS cell_provenance,
+  cell_content,
+  cell_annotation 
+FROM table_cell tc 
+JOIN source_table st
+ON   tc.table_id = st.table_id;
+
+ALTER VIEW tabby_cell_view OWNER TO table_model;
+
+-- 2. Create tabby_entry_view
+
+\echo Create view tabby_entry_view
+
+DROP VIEW IF EXISTS tabby_entry_view;
+CREATE VIEW tabby_entry_view AS
+SELECT
+  cv.table_id,
+  cv.cell_id,
+  cv.cell_content as entry,
+  cv.cell_provenance as provenance
+FROM entry e
+JOIN tabby_cell_view cv
+ON   e.entry_cell_id = cv.cell_id;
+
+ALTER VIEW tabby_entry_view OWNER TO table_model;
+
+-- 3. Create tabby_label_view
+
+\echo Create view tabby_label_view
+
+DROP VIEW IF EXISTS tabby_label_view;
+CREATE VIEW tabby_label_view AS
+SELECT cv.table_id,
+    cv.cell_id AS label_cell_id,
+    cv.cell_content AS label_value,
+    CASE 
+      WHEN parent_cell.cell_content IS NOT NULL 
+      THEN (parent_cell.cell_content || ' | '::text) || cv.cell_content
+      ELSE cv.cell_content
+    END AS label_display_value,
+    cv.cell_provenance AS label_provenance,
+    l.category_name AS category,
+    parent_cell.cell_id AS parent_label_cell_id,
+    parent_cell.cell_content AS parent_label_value,
+    parent_cell.cell_provenance AS parent_label_provenance
+   FROM label l
+     JOIN tabby_cell_view cv ON l.label_cell_id = cv.cell_id
+     LEFT JOIN tabby_cell_view parent_cell ON l.parent_label_cell_id = parent_cell.cell_id;
+
+ALTER VIEW tabby_label_view OWNER TO table_model;
+
+-- 4. Create tabby_entry_label_view
+
+\echo Create view tabby_entry_label_view
+
+-- Based on entry_label, with additional information from table_cell
+
+-- WHAT HAPPENED TO THE ENTRIES IN CATEGORY ColumnHeading ?? -- FIX THIS !!
+
+DROP VIEW IF EXISTS tabby_entry_label_view;
+CREATE VIEW tabby_entry_label_view AS
+SELECT
+  entry_cell.table_id,
+  entry_cell.cell_id as entry_cell_id,
+  entry_cell.cell_content as entry_value,
+  entry_cell.cell_provenance as entry_provenance,
+  label_cell.cell_id as label_cell_id,
+  label_cell.cell_content as label_value,
+  label_cell.cell_provenance as label_provenance,
+  tlv.label_display_value,
+  tlv.category
+FROM entry_label el
+JOIN tabby_cell_view entry_cell
+ON   el.entry_cell_id = entry_cell.cell_id
+JOIN tabby_label_view tlv            
+ON   el.label_cell_id = tlv.label_cell_id 
+JOIN tabby_cell_view label_cell
+ON   el.label_cell_id = label_cell.cell_id;
+
+ALTER VIEW tabby_entry_label_view OWNER TO table_model;
+
+/* ------------------------------------------------------------------------------------------------------------ */
+/* Create functions and views to support evaluation (comparison of output against ground truth for each method) */
+/* ------------------------------------------------------------------------------------------------------------ */
 
 -- 1. Create function to compare two values
 
@@ -676,7 +775,7 @@ FROM table_method_list
     AND table_method_list.table_method = output_label_label_counts.table_method
   JOIN gt_label_label_counts
     ON table_method_list.table_name = gt_label_label_counts.table_name
-    AND table_method_list.table_method = gt_label_label_counts.table_method
+--    AND table_method_list.table_method = gt_label_label_counts.table_method
   JOIN label_label_true_positives
     ON table_method_list.table_name = label_label_true_positives.table_name
     AND table_method_list.table_method = label_label_true_positives.table_method
@@ -781,7 +880,7 @@ FROM table_method_list
     AND table_method_list.table_method = output_entry_label_counts.table_method
   JOIN gt_entry_label_counts
     ON table_method_list.table_name = gt_entry_label_counts.table_name
-    AND table_method_list.table_method = gt_entry_label_counts.table_method
+--    AND table_method_list.table_method = gt_entry_label_counts.table_method
   JOIN entry_label_true_positives
     ON table_method_list.table_name = entry_label_true_positives.table_name
     AND table_method_list.table_method = entry_label_true_positives.table_method

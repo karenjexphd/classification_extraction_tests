@@ -177,6 +177,7 @@ $pg_conn_table_model -f tableModelDDL/00_drop_schema.sql
 
 $pg_conn_table_model -f tableModelDDL/01_create_schema.sql
 $pg_conn_table_model -f tableModelDDL/02_create_tables.sql
+$pg_conn_table_model -f tableModelDDL/02b_create_indexes.sql
 $pg_conn_table_model -f tableModelDDL/03_create_constraints.sql
 $pg_conn_table_model -f tableModelDDL/04_create_views.sql
 $pg_conn_table_model -f tableModelDDL/05_create_temp_tables.sql

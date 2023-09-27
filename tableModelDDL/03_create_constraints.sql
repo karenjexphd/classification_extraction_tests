@@ -25,9 +25,9 @@ REFERENCES table_model.table_cell(cell_id);
 
 \echo Create constraints on label
 
-ALTER TABLE table_model.label
-ADD CONSTRAINT fk_category FOREIGN KEY (category_name)
-REFERENCES table_model.category(category_name);
+-- ALTER TABLE table_model.label
+-- ADD CONSTRAINT fk_category FOREIGN KEY (category_name)
+-- REFERENCES table_model.category(category_name);
 
 ALTER TABLE table_model.label
 ADD CONSTRAINT fk_table_cell FOREIGN KEY (label_cell_id)
