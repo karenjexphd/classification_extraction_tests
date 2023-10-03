@@ -181,7 +181,7 @@ $pg_conn_table_model -f tableModelDDL/02b_create_indexes.sql
 $pg_conn_table_model -f tableModelDDL/03_create_constraints.sql
 $pg_conn_table_model -f tableModelDDL/04_create_views.sql
 $pg_conn_table_model -f tableModelDDL/05_create_temp_tables.sql
-$pg_conn_table_model -f tableModelDDL/06_create_procedures.sql
+#$pg_conn_table_model -f tableModelDDL/06_create_procedures.sql
 
 # $pg_conn_table_model -c "TRUNCATE entry_label, label, entry, category, table_cell, source_table, entry_temp, label_temp, entry_label_temp"
 

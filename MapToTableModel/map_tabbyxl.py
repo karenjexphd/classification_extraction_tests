@@ -281,16 +281,6 @@ insert_el="INSERT INTO entry_label (entry_cell_id, label_cell_id) \
            AND l_cell.table_id="+str(table_id)
 cur.execute(insert_el)
 
-# Generate canonical_table_<table_id>
-
-create_ctv="CALL create_tabby_canonical_table("+str(table_id)+")"
-cur.execute(create_ctv)
-
-select_ctv="SELECT * FROM tabby_canonical_table_"+str(table_id)
-cur.execute(select_ctv)
-canonical_table = cur.fetchall()
-# print(canonical_table)
-
 # Empty temp tables
 
 truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"

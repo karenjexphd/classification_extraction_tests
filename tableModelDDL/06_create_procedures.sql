@@ -1,3 +1,6 @@
+-- NOTE: This file is not currently (03-oct-2023) called within the main shell script
+--       The procedure may or may not be needed later
+
 \echo Create procedure create_tabby_canonical_table to generate the Tabby canonical table
 
 -- The procedure will generate the table tabby_canonical_table_<in_table_id>
