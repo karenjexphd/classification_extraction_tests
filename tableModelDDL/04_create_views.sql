@@ -522,7 +522,6 @@ FROM data;
 
 ALTER VIEW entry_confusion OWNER TO table_model;
 
-
 -- 5.2 label_confusion - views to display confusion matrix for set of labels
 
 
@@ -538,6 +537,8 @@ CREATE OR REPLACE VIEW gt_label_counts AS
     LEFT JOIN gt_label_set -- ensures one row per table
       ON table_list.table_name = gt_label_set.table_name
   GROUP BY table_list.table_name;
+
+ALTER VIEW gt_label_counts OWNER TO table_model;
 
 
 \echo Create output_label_counts view
