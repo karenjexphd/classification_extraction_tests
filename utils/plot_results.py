@@ -46,6 +46,11 @@ cur.execute('SET SEARCH_PATH=table_model')
 # Setup the figure with 4 subplots
 fig, ax1 = plt.subplots(2,2,figsize=(10,10))
 
+# Specify range 0 to 1 for the x and y axes of all plots
+
+plt.xlim(0, 1)
+plt.ylim(0, 1)
+
 # Get data
 
 # recall_<set> = recall values per table for set of entries (e), labels (l), entry-label pairs (el) or label-label pairs (ll) for given method
@@ -91,31 +96,41 @@ select_stmt="SELECT ll_precision FROM label_label_confusion WHERE table_method='
 cur.execute(select_stmt)
 precision_ll = cur.fetchall()
 
+# Set shared properties for the subplots
+
+for a in (0,1):
+  for b in (0,1):
+    ax1[a,b].set_xlim([0,1])
+    ax1[a,b].set_ylim([0,1])
+    ax1[a,b].set_ylabel("Precision")
+    ax1[a,b].set_xlabel("Recall")
+
 # Plot scatter graph subplot for each set of items
 
-#    entries (Recall x-axis, precision y-axis)
-ax1[0,0].scatter(recall_entries,precision_entries, s=point_size, alpha=opacity)
+#    entries (top left subplot)
+x=recall_entries
+y=precision_entries
+ax1[0,0].scatter(x,y, s=point_size, alpha=opacity)
 ax1[0,0].set_title(method+" Entries")
-ax1[0,0].set_ylabel("Precision")
-ax1[0,0].set_xlabel("Recall")
 
-#    labels (Recall x-axis, precision y-axis)
-ax1[0,1].scatter(recall_labels,precision_labels, s=point_size, alpha=opacity)
+#    labels (top right subplot)
+x=recall_labels
+y=precision_labels
+ax1[0,1].scatter(x,y, s=point_size, alpha=opacity)
 ax1[0,1].set_title(method+" Labels")
-ax1[0,1].set_ylabel("Precision")
-ax1[0,1].set_xlabel("Recall")
 
-#    entry-label pairs (Recall x-axis, precision y-axis)
-ax1[1,0].scatter(recall_el,precision_el, s=point_size, alpha=opacity)
+#    entry-label pairs (bottom left subplot)
+x=recall_el
+y=precision_el
+ax1[1,0].scatter(x,y, s=point_size, alpha=opacity)
 ax1[1,0].set_title(method+" Entry-Label Pairs")
-ax1[1,0].set_ylabel("Precision")
-ax1[1,0].set_xlabel("Recall")
 
-#    entry-label pairs (Recall x-axis, precision y-axis)
-ax1[1,1].scatter(recall_ll,precision_ll, s=point_size, alpha=opacity)
+#    entry-label pairs (bottom right subplot)
+x=recall_ll
+y=precision_ll
+ax1[1,1].scatter(x,y, s=point_size, alpha=opacity)
 ax1[1,1].set_title(method+" Label-Label Pairs")
-ax1[1,1].set_ylabel("Precision")
-ax1[1,1].set_xlabel("Recall")
+
 
 # Add space between subplots
 fig.tight_layout(pad=padding)
@@ -127,3 +142,4 @@ fig.suptitle("Precision vs Recall Scatter Plot for "+method)
 fig.savefig(outputpath+"/plot1_"+method+".png", dpi=image_dpi)
 
 #plt.show()
+
