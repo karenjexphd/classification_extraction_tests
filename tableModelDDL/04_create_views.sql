@@ -234,22 +234,6 @@ FROM source_table
     ON label.label_cell_id = table_cell.cell_id
 WHERE NOT source_table.table_is_gt;
 
--- CREATE OR REPLACE VIEW output_label_set AS
--- SELECT 
---   source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS table_name, 
---   source_table.table_method,
---   table_cell.cell_id,
---   table_cell.left_col, 
---   table_cell.top_row, 
---   label.category_name, 
---   table_cell.cell_content AS label
--- FROM source_table 
---   JOIN table_cell
---     ON source_table.table_id = table_cell.table_id
---   JOIN label
---     ON label.label_cell_id = table_cell.cell_id
--- WHERE NOT source_table.table_is_gt;
-
 ALTER VIEW output_label_set OWNER TO table_model;
 
 \echo Create gt_entry_set view
@@ -416,10 +400,11 @@ ALTER VIEW table_method_list OWNER TO table_model;
 -- One row per table. Count is zero if no entries exist for given table
 
 CREATE OR REPLACE VIEW gt_entry_counts AS 
+  WITH table_list AS (SELECT distinct table_name FROM table_method_list)
   SELECT 
     table_list.table_name,
     count(*) FILTER( WHERE gt_entry_set.table_name is not null) AS gt_entries
-  FROM (select distinct table_name from table_method_list) as table_list   -- use table_method_list as driving table
+  FROM table_list
     LEFT JOIN gt_entry_set -- ensures one row per table
       ON table_list.table_name = gt_entry_set.table_name
   GROUP BY table_list.table_name;
@@ -453,10 +438,7 @@ CREATE OR REPLACE VIEW entry_true_positives AS
     count(*) FILTER (
               -- only count rows where the row offset between GT and output is consistent
               WHERE row_offset = coalesce(prev_row_offset, row_offset) 
-              AND row_offset = coalesce(next_row_offset, row_offset)
-              -- only count rows where the row offset between GT and output is consistent
-              AND col_offset = coalesce(prev_col_offset, col_offset) 
-              AND col_offset = coalesce(next_col_offset, col_offset) )
+              AND row_offset = coalesce(next_row_offset, row_offset))
         AS entry_true_pos
   FROM (
   SELECT
@@ -466,9 +448,6 @@ CREATE OR REPLACE VIEW entry_true_positives AS
     gt_entry_set.left_col AS gt_left_col,
     output_entry_set.top_row AS out_top_row,
     output_entry_set.left_col AS out_left_col,
-    lag(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS prev_col_offset,
-    gt_entry_set.left_col - output_entry_set.left_col AS col_offset,
-    lead(gt_entry_set.left_col - output_entry_set.left_col) over win_c AS next_col_offset,
     lag(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS prev_row_offset,
     gt_entry_set.top_row - output_entry_set.top_row AS row_offset,
     lead(gt_entry_set.top_row - output_entry_set.top_row) over win_r AS next_row_offset,
@@ -484,13 +463,7 @@ CREATE OR REPLACE VIEW entry_true_positives AS
             PARTITION BY output_entry_set.table_method,
                          output_entry_set.table_name
             ORDER BY     gt_entry_set.top_row, 
-                         gt_entry_set.left_col),
-          win_c AS (
-            -- window for comparing column offsets
-            PARTITION BY output_entry_set.table_method,
-                         output_entry_set.table_name
-            ORDER BY     gt_entry_set.left_col, 
-                         gt_entry_set.top_row)
+                         gt_entry_set.left_col)
   ) matching_entry_values
   RIGHT JOIN table_method_list
     ON matching_entry_values.table_name = table_method_list.table_name
@@ -557,15 +530,14 @@ ALTER VIEW entry_confusion OWNER TO table_model;
 -- One row per table. Count is zero if no labels exist for given table
 
 CREATE OR REPLACE VIEW gt_label_counts AS 
-  SELECT 
-    table_method_list.table_name,
+  WITH table_list AS (SELECT distinct table_name FROM table_method_list)
+  SELECT
+    table_list.table_name,
     count(*) FILTER( WHERE gt_label_set.table_name is not null) AS gt_labels
-  FROM table_method_list   -- use table_method_list as driving table
+  FROM table_list
     LEFT JOIN gt_label_set -- ensures one row per table
-      ON table_method_list.table_name = gt_label_set.table_name
-  GROUP BY table_method_list.table_name;
-
-ALTER VIEW gt_label_counts OWNER TO table_model;
+      ON table_list.table_name = gt_label_set.table_name
+  GROUP BY table_list.table_name;
 
 
 \echo Create output_label_counts view
@@ -592,15 +564,10 @@ CREATE OR REPLACE VIEW label_true_positives AS
   SELECT
     table_method_list.table_name, 
     table_method_list.table_method,
-    count(*) FILTER (
-              -- only count rows where the row offset between GT and output is consistent
-              WHERE row_offset = coalesce(prev_row_offset, row_offset) 
-              AND row_offset = coalesce(next_row_offset, row_offset)
-              -- only count rows where the row offset between GT and output is consistent
-              AND col_offset = coalesce(prev_col_offset, col_offset) 
-              AND col_offset = coalesce(next_col_offset, col_offset) )
-        AS label_true_pos
-  FROM (
+    count(*) AS label_true_pos
+  FROM (  
+  -- find potentiall matching labels by comparing gt_label_set against output_label_set
+  -- matching on table_name, label value and column ID (row ID may be offset - that's fine)
   SELECT
     output_label_set.table_name,
     output_label_set.table_method,  
@@ -608,12 +575,9 @@ CREATE OR REPLACE VIEW label_true_positives AS
     gt_label_set.left_col AS gt_left_col,
     output_label_set.top_row AS out_top_row,
     output_label_set.left_col AS out_left_col,
-    lag(gt_label_set.left_col - output_label_set.left_col) over win_c AS prev_col_offset,
-    gt_label_set.left_col - output_label_set.left_col AS col_offset,
-    lead(gt_label_set.left_col - output_label_set.left_col) over win_c AS next_col_offset,
-    lag(gt_label_set.top_row - output_label_set.top_row) over win_r AS prev_row_offset,
+    -- lag(gt_label_set.top_row - output_label_set.top_row) over win_r AS prev_row_offset,
     gt_label_set.top_row - output_label_set.top_row AS row_offset,
-    lead(gt_label_set.top_row - output_label_set.top_row) over win_r AS next_row_offset,
+    -- lead(gt_label_set.top_row - output_label_set.top_row) over win_r AS next_row_offset,
     gt_label_set.label gt_label,
     output_label_set.label out_label
     FROM gt_label_set 
@@ -621,18 +585,13 @@ CREATE OR REPLACE VIEW label_true_positives AS
       -- join rows on label value and table_name - will get a row per table, per method and per label value
       ON is_reconcilable(gt_label_set.label, output_label_set.label)
       AND gt_label_set.table_name=output_label_set.table_name
+      AND gt_label_set.left_col=output_label_set.left_col
   WINDOW  win_r AS (
-            -- window for comparing row offsets
+            -- window for comparing row offsets per table and per method
             PARTITION BY output_label_set.table_method,
                          output_label_set.table_name
             ORDER BY     gt_label_set.top_row, 
-                         gt_label_set.left_col),
-          win_c AS (
-            -- window for comparing column offsets
-            PARTITION BY output_label_set.table_method,
-                         output_label_set.table_name
-            ORDER BY     gt_label_set.left_col, 
-                         gt_label_set.top_row)
+                         gt_label_set.left_col)
   ) matching_label_values
   RIGHT JOIN table_method_list
     ON matching_label_values.table_name = table_method_list.table_name
@@ -640,8 +599,7 @@ CREATE OR REPLACE VIEW label_true_positives AS
   GROUP BY table_method_list.table_method, table_method_list.table_name
   ORDER BY table_method_list.table_method, table_method_list.table_name;
 
-ALTER VIEW label_true_positives OWNER TO table_model;
-
+ALTER VIEW label_true_positives OWNER TO table_model;                        
 
 \echo Create label_confusion view
 
@@ -696,13 +654,14 @@ ALTER VIEW label_confusion OWNER TO table_model;
 -- One row per table. Count is zero if no label-label pairs exist for given table
 
 CREATE OR REPLACE VIEW gt_label_label_counts AS 
+  WITH table_list AS (SELECT distinct table_name FROM table_method_list)
   SELECT 
-    table_method_list.table_name,
+    table_list.table_name,
     count(*) filter( where gt_label_label_set.table_name is not null) AS gt_label_labels
-  FROM table_method_list   -- use table_method_list as driving table
+  FROM table_list
     LEFT JOIN gt_label_label_set -- ensures one row per table
-      ON table_method_list.table_name = gt_label_label_set.table_name
-  GROUP BY table_method_list.table_name;
+      ON table_list.table_name = gt_label_label_set.table_name
+  GROUP BY table_list.table_name;
 
 ALTER VIEW gt_label_label_counts OWNER TO table_model;
 
@@ -800,13 +759,14 @@ ALTER VIEW label_label_confusion OWNER TO table_model;
 -- One row per table. Count is zero if no entry label pairs exist for given table
 
 CREATE OR REPLACE VIEW gt_entry_label_counts AS 
+  WITH table_list AS (SELECT distinct table_name FROM table_method_list)
   SELECT 
-    table_method_list.table_name,
+    table_list.table_name,
     count(*) filter( where gt_entry_label_set.table_name is not null) AS gt_entry_labels
-  FROM table_method_list   -- use table_method_list as driving table
+  FROM table_list   -- use table_method_list as driving table
     LEFT JOIN gt_entry_label_set -- ensures one row per table and per method
-      ON table_method_list.table_name = gt_entry_label_set.table_name
-  GROUP BY table_method_list.table_name;
+      ON table_list.table_name = gt_entry_label_set.table_name
+  GROUP BY table_list.table_name;
 
 ALTER VIEW gt_entry_label_counts OWNER TO table_model;
 
