@@ -192,7 +192,7 @@ for i in range(len(tables)):
 
     for col_id in range(len(columns)):
         column=columns[str(col_id)]            
-        col_num = column['table_column']       # NOTE: doesn't necessarily represent column number in the spreadsheet - may need to do some translation
+        col_num = column['table_column']    # retrieve the column number that Pytheas has allocated to this column
         col_nums.append(col_num)             
 
         column_header=column['column_header']
@@ -236,13 +236,12 @@ for i in range(len(tables)):
                 cur.execute(insert_lt)
 
     # Populate table_cell based on label_temp contents
-
-    # QUESTION: Do the Pytheas table_cell coordinates (left_col and top_row) represent the position of the cell within the table
-    # or the position of the cell within the file (i.e. the cell provenance in TabbyXL language)?
-
-    # May need to calculate based on table start row and column as for tabbyxl mapping
+    # Note that table_cell represents information about the position of a cell within a table rather than within the original file
 
     #   top_row = bottom_row and right_col = left_col because the Pytheas table_cell is always a single physical cell
+
+    #   label_provenance_col is incremented by 1 to get right_col and left_col 
+    #   because Pytheas indexes the columns starting at 0 whereas we number the columns starting at 1
 
     insert_stmt="INSERT INTO table_cell (\
                         table_id, \
@@ -253,9 +252,9 @@ for i in range(len(tables)):
                         cell_content, \
                         cell_annotation) \
                 SELECT  "+str(table_id)+", \
-                        CAST(label_provenance_col AS INTEGER), \
+                        CAST(label_provenance_col AS INTEGER) + 1, \
                         label_provenance_row, \
-                        CAST(label_provenance_col AS INTEGER), \
+                        CAST(label_provenance_col AS INTEGER) + 1, \
                         label_provenance_row, \
                         label_value, \
                         'HEADING' \
@@ -289,7 +288,10 @@ for i in range(len(tables)):
 
     data_rows=[row for row in range(data_start,data_end+1)]
 
-    # Populate temporary table entry_temp       NOTE: infer the cells that contain data/entries from the list of data rows and the list of columns
+    # Populate temporary table entry_temp       
+    # NOTE: we infer the cells that contain data/entries from the list of data rows and the list of columns
+    #       this may not be a good idea. Probably better to add a "table_rows" table to the model and populate it for both GT (based on distinct entry row values) and for output
+    #       how and where do we distinguish what type of system is being evaluated? Part of the input to the main script? metadata re. the different systems?
 
     for data_row in data_rows:
 
@@ -322,9 +324,9 @@ for i in range(len(tables)):
                         bottom_row, \
                         cell_annotation) \
                 SELECT  "+str(table_id)+", \
-                        CAST(entry_provenance_col AS INTEGER), \
+                        CAST(entry_provenance_col AS INTEGER) +1, \
                         entry_provenance_row, \
-                        CAST(entry_provenance_col AS INTEGER), \
+                        CAST(entry_provenance_col AS INTEGER) +1, \
                         entry_provenance_row, \
                         'DATA' \
                 FROM entry_temp WHERE table_id="+str(table_id)
@@ -336,14 +338,6 @@ for i in range(len(tables)):
                 SELECT cell_id FROM table_cell \
                 WHERE table_id="+str(table_id)+" AND cell_annotation='DATA'"
     cur.execute(insert_stmt)
-
-    # Display contents of pytheas_canonical_table_view
-
-    # select_ctv="SELECT table_number, table_row, row_provenance, cell_annotation \
-    #             FROM pytheas_canonical_table_view where table_id="+str(table_id)
-    # cur.execute(select_ctv)
-    # canonical_table = cur.fetchall()
-    # print(canonical_table)
 
     truncate_et="TRUNCATE TABLE entry_temp, label_temp, entry_label_temp"
     cur.execute(truncate_et)
