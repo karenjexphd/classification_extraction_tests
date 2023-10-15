@@ -116,6 +116,9 @@ CREATE OR REPLACE FUNCTION is_reconcilable(val1 text, val2 text) RETURNS boolean
       --  Remove leading spaces from each vaue:
       val1 = ltrim(val1);
       val2 = ltrim(val2);
+      --  Remove trailing spaces from each vaue:
+      val1 = rtrim(val1);
+      val2 = rtrim(val2);
       -- compare as numeric if the following rules are obeyed:
       --   1. may or may not start with a minus sign
       --   2. remaining string contains repetitions of: one or more characters 0-9 followed by 0 or one comma, full stop or space
