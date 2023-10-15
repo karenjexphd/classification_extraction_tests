@@ -199,7 +199,7 @@ ALTER VIEW gt_label_set OWNER TO table_model;
 
 CREATE OR REPLACE VIEW output_label_set AS
 WITH hypoparsr_base_labels AS (
-    -- list of labels in hypoparsr output with no n suffix (where n is one or more numeric characters)
+    -- list of labels in hypoparsr output with no .n or n suffix (where n is one or more numeric characters)
     SELECT 
     source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number AS base_label_table_name, 
     table_cell.cell_content AS base_label
@@ -209,7 +209,7 @@ WITH hypoparsr_base_labels AS (
     JOIN label
         ON label.label_cell_id = table_cell.cell_id
     WHERE   source_table.table_method='hypoparsr'
-    AND     table_cell.cell_content = regexp_replace(table_cell.cell_content,'[0-9]+$','') 
+    AND     table_cell.cell_content = regexp_replace(table_cell.cell_content,'[.]?[0-9]+$','') 
     AND NOT source_table.table_is_gt
     )
 SELECT 
@@ -221,9 +221,9 @@ SELECT
   label.category_name,
   CASE 
     -- for hypoparsr only: if a corresponding label without a suffix exists, return the label with the suffix removed
-    WHEN (regexp_replace(table_cell.cell_content,'[0-9]+$','')  IN (SELECT base_label from hypoparsr_base_labels WHERE base_label_table_name=source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number)
+    WHEN (regexp_replace(table_cell.cell_content,'[.]?[0-9]+$','')  IN (SELECT base_label from hypoparsr_base_labels WHERE base_label_table_name=source_table.file_name||'_'||source_table.sheet_number||'_'||source_table.table_number)
     AND table_method = 'hypoparsr')
-    THEN regexp_replace(table_cell.cell_content,'[0-9]+$','')  
+    THEN regexp_replace(table_cell.cell_content,'[.]?[0-9]+$','')  
     -- otherwise return the unchanged label value
     ELSE table_cell.cell_content
   END AS label
