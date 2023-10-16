@@ -493,13 +493,13 @@ SELECT
     -- Avoid divide by zero error if no output_entries
     WHEN output_entry_counts.output_entries=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (entry_true_positives.entry_true_pos::numeric/output_entry_counts.output_entries)::numeric(4,3)
+    ELSE (entry_true_positives.entry_true_pos::numeric/output_entry_counts.output_entries)::numeric(5,3)
   END AS e_precision,
   CASE 
     -- Avoid divide by zero error if no gt_entries
     WHEN gt_entry_counts.gt_entries=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (entry_true_positives.entry_true_pos::numeric/gt_entry_counts.gt_entries)::numeric(4,3)
+    ELSE (entry_true_positives.entry_true_pos::numeric/gt_entry_counts.gt_entries)::numeric(5,3)
   END AS e_recall
 FROM table_method_list
   JOIN output_entry_counts
@@ -519,7 +519,7 @@ SELECT
     -- Avoid divide by zero error if no output_entry_labels
     WHEN e_precision+e_recall=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (2*e_precision*e_recall/(e_precision+e_recall))::numeric(4,3)
+    ELSE (2*e_precision*e_recall/(e_precision+e_recall))::numeric(5,3)
   END AS e_f_measure
 FROM data;
 
@@ -621,13 +621,13 @@ SELECT
     -- Avoid divide by zero error if no output_labels
     WHEN output_label_counts.output_labels=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (label_true_positives.label_true_pos::numeric/output_label_counts.output_labels)::numeric(4,3)
+    ELSE (label_true_positives.label_true_pos::numeric/output_label_counts.output_labels)::numeric(5,3)
   END AS l_precision,
   CASE 
     -- Avoid divide by zero error if no gt_labels
     WHEN gt_label_counts.gt_labels=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (label_true_positives.label_true_pos::numeric/gt_label_counts.gt_labels)::numeric(4,3)
+    ELSE (label_true_positives.label_true_pos::numeric/gt_label_counts.gt_labels)::numeric(5,3)
   END AS l_recall
 FROM table_method_list
   JOIN output_label_counts
@@ -646,7 +646,7 @@ SELECT
     -- Avoid divide by zero error if no output_entry_labels
     WHEN l_precision+l_recall=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (2*l_precision*l_recall/(l_precision+l_recall))::numeric(4,3)
+    ELSE (2*l_precision*l_recall/(l_precision+l_recall))::numeric(5,3)
   END AS l_f_measure
 FROM data;
 
@@ -724,13 +724,13 @@ SELECT
     -- Avoid divide by zero error if no output_label_labels
     WHEN output_label_label_counts.output_label_labels=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (label_label_true_positives.label_label_true_pos::numeric/output_label_label_counts.output_label_labels)::numeric(4,3)
+    ELSE (label_label_true_positives.label_label_true_pos::numeric/output_label_label_counts.output_label_labels)::numeric(5,3)
   END AS ll_precision,
   CASE 
     -- Avoid divide by zero error if no gt_label_labels
     WHEN gt_label_label_counts.gt_label_labels=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (label_label_true_positives.label_label_true_pos::numeric/gt_label_label_counts.gt_label_labels)::numeric(4,3)
+    ELSE (label_label_true_positives.label_label_true_pos::numeric/gt_label_label_counts.gt_label_labels)::numeric(5,3)
   END AS ll_recall
 FROM table_method_list
   JOIN output_label_label_counts
@@ -750,7 +750,7 @@ SELECT
     -- Avoid divide by zero error if no output_entry_labels
     WHEN ll_precision+ll_recall=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (2*ll_precision*ll_recall/(ll_precision+ll_recall))::numeric(4,3)
+    ELSE (2*ll_precision*ll_recall/(ll_precision+ll_recall))::numeric(5,3)
   END AS ll_f_measure
 FROM data;
 
@@ -830,13 +830,13 @@ SELECT
     -- Avoid divide by zero error if no output_entry_labels
     WHEN output_entry_label_counts.output_entry_labels=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (entry_label_true_positives.entry_label_true_pos::numeric/output_entry_label_counts.output_entry_labels)::numeric(4,3)
+    ELSE (entry_label_true_positives.entry_label_true_pos::numeric/output_entry_label_counts.output_entry_labels)::numeric(5,3)
   END AS el_precision,
   CASE 
     -- Avoid divide by zero error if no gt_entry_labels
     WHEN gt_entry_label_counts.gt_entry_labels=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (entry_label_true_positives.entry_label_true_pos::numeric/gt_entry_label_counts.gt_entry_labels)::numeric(4,3)
+    ELSE (entry_label_true_positives.entry_label_true_pos::numeric/gt_entry_label_counts.gt_entry_labels)::numeric(5,3)
   END AS el_recall
 FROM table_method_list
   JOIN output_entry_label_counts
@@ -856,7 +856,7 @@ SELECT
     -- Avoid divide by zero error if no output_entry_labels
     WHEN el_precision+el_recall=0 THEN 0.000
     -- Cast to numeric and round to 3 decimal places
-    ELSE (2*el_precision*el_recall/(el_precision+el_recall))::numeric(4,3)
+    ELSE (2*el_precision*el_recall/(el_precision+el_recall))::numeric(5,3)
   END AS el_f_measure
 FROM data;
 
