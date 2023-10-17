@@ -245,7 +245,10 @@ for tabkey in tables:
     #   top_row = bottom_row and right_col = left_col because the Pytheas table_cell is always a single physical cell
 
     #   label_provenance_col is incremented by 1 to get right_col and left_col 
-    #   because Pytheas indexes the columns starting at 0 whereas we number the columns starting at 1
+    #   because Pytheas indexes the columns starting at 0 whereas we number the columns starting at 1 
+    # 
+    #   ABOVE STATEMENT NOT NECESSARILY TRUE
+    #   Preferable to NOT increment during mapping and take possible offset into account during evaluation
 
     insert_stmt="INSERT INTO table_cell (\
                         table_id, \
@@ -256,9 +259,9 @@ for tabkey in tables:
                         cell_content, \
                         cell_annotation) \
                 SELECT  "+str(table_id)+", \
-                        CAST(label_provenance_col AS INTEGER) + 1, \
+                        CAST(label_provenance_col AS INTEGER), \
                         label_provenance_row, \
-                        CAST(label_provenance_col AS INTEGER) + 1, \
+                        CAST(label_provenance_col AS INTEGER), \
                         label_provenance_row, \
                         label_value, \
                         'HEADING' \
@@ -328,9 +331,9 @@ for tabkey in tables:
                         bottom_row, \
                         cell_annotation) \
                 SELECT  "+str(table_id)+", \
-                        CAST(entry_provenance_col AS INTEGER) +1, \
+                        CAST(entry_provenance_col AS INTEGER), \
                         entry_provenance_row, \
-                        CAST(entry_provenance_col AS INTEGER) +1, \
+                        CAST(entry_provenance_col AS INTEGER), \
                         entry_provenance_row, \
                         'DATA' \
                 FROM entry_temp WHERE table_id="+str(table_id)
