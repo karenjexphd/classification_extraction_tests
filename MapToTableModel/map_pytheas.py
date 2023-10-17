@@ -95,21 +95,16 @@ cur.execute('SET SEARCH_PATH=table_model')
 
 # 3. Process tables
 
-# print ("number of tables: ",len(tables))
+for tabkey in tables:
 
-for i in range(len(tables)):
-    table=tables[str(i+1)]              # first table (in output) will have key '1', second will have key '2' etc.
-                                        # CHECK: this may differ if we are processing the GT
-    tablenum=i                          # to match the way in which the tables are numbered for the other systems
+    print("INFO: processing table with key ",tabkey)
+
+    table=tables[tabkey]
     tablestart=table['top_boundary']
     tableend=table['bottom_boundary']
 
-    # print()
-    # print()
-    # print("table being processed:")
-    # print(table)
-    # print()
-    # print()
+    # Subtract 1 from tabkey to get table number because Pytheas indexes tables from 1 whereas GT tables are indexed from 0
+    table_num = int(tabkey)-1
 
     # retrieve existing data (table ID, table start/end col & row) from source_table for the file/table being processed
     # note that sheet_number is always 0 for pytheas
@@ -123,16 +118,22 @@ for i in range(len(tables)):
                 WHERE table_is_gt=TRUE \
                 AND file_name='"+filename+"' \
                 AND sheet_number=0 \
-                AND table_number="+str(tablenum)
+                AND table_number="+str(table_num)
     cur.execute(select_stmt)
 
     table_info = cur.fetchone()
 
-    gt_table_id    = table_info[0]
-    tablestart_col = table_info[1]
-    tablestart_row = table_info[2]
-    tableend_col   = table_info[3]
-    tableend_row   = table_info[4]
+    # the following should only be executed if a corresponding ground truth table exists in source_table
+    # i.e. a row has beeen returned by the previous statement
+
+    try:
+        gt_table_id    = table_info[0]
+        tablestart_col = table_info[1]
+        tablestart_row = table_info[2]
+        tableend_col   = table_info[3]
+        tableend_row   = table_info[4]
+    except TypeError:
+        print('WARNING: No ground truth exists for this table')
 
     if is_gt:
 
@@ -160,7 +161,7 @@ for i in range(len(tables)):
                         "+str(tableend)+", \
                         '"+filename+"', \
                         0, \
-                        "+str(tablenum)+")"
+                        "+str(table_num)+")"
         cur.execute(insert_stmt)
 
         # retrieve (automatically generated) table_id from source_table
@@ -170,13 +171,13 @@ for i in range(len(tables)):
                     AND table_method='pytheas' \
                     AND file_name='"+filename+"' \
                     AND sheet_number=0 \
-                    AND table_number="+str(tablenum)
+                    AND table_number="+str(table_num)
         cur.execute(select_stmt)
         
         table_info = cur.fetchone() 
 
         table_id = table_info[0]
-        print('table_id: '+str(table_id))
+        print('INFO: source_table.table_id: '+str(table_id))
 
     # Continue to populate the table_model whether this is a ground truth or an output file
 
@@ -188,52 +189,55 @@ for i in range(len(tables)):
 
     columns=table['columns']
 
-    col_nums=[]
+    col_nums=[]         # gather list of columns to allow identification of heading and data cells
 
-    for col_id in range(len(columns)):
-        column=columns[str(col_id)]            
+    # print('INFO: this table contains', len(columns), 'columns')    
+
+    for col in columns:
+
+        print('INFO: processing column ',col)
+
+        column=columns[col]
         col_num = column['table_column']    # retrieve the column number that Pytheas has allocated to this column
         col_nums.append(col_num)             
 
         column_header=column['column_header']
-        if len(column_header)>0:          # i.e. the column contains labels)
 
-            # print('Column ',col_id,':')
+        # print('Column ',col_id,':')
 
-            for k in range(len(column_header)):
-                label=column_header[k]  
+        for label in column_header:
 
-                label_prov_col=label['column']         
-                label_prov_row=label['row']
-                label_index=label['index']
-                label_val=label['value']
+            label_prov_col=label['column']         
+            label_prov_row=label['row']
+            label_index=label['index']
+            label_val=label['value']
 
-                # insert info for this label into label_temp IF IT DOES NOT ALREADY EXIST (parent labels are repeated in the JSON)
+            # insert info for this label into label_temp IF IT DOES NOT ALREADY EXIST (parent labels are repeated in the JSON)
 
-                insert_lt="INSERT INTO label_temp (\
+            insert_lt="INSERT INTO label_temp (\
+                            table_id,\
+                            label_value,\
+                            label_provenance_col,\
+                            label_provenance_row) \
+                        SELECT \
+                            "+str(table_id)+",\
+                            '"+label_val+"',\
+                            '"+str(label_prov_col)+"',\
+                            '"+str(label_prov_row)+"'\
+                        WHERE NOT EXISTS ( \
+                            SELECT \
                                 table_id,\
                                 label_value,\
                                 label_provenance_col,\
-                                label_provenance_row) \
-                            SELECT \
-                                "+str(table_id)+",\
-                                '"+label_val+"',\
-                                '"+str(label_prov_col)+"',\
-                                '"+str(label_prov_row)+"'\
-                            WHERE NOT EXISTS ( \
-                                SELECT \
-                                    table_id,\
-                                    label_value,\
-                                    label_provenance_col,\
-                                    label_provenance_row \
-                                FROM label_temp \
-                                WHERE \
-                                    table_id = "+str(table_id)+" AND \
-                                    label_value = '"+label_val+"' AND \
-                                    label_provenance_col = '"+str(label_prov_col)+"' AND \
-                                    label_provenance_row = '"+str(label_prov_row)+"')"
-                                
-                cur.execute(insert_lt)
+                                label_provenance_row \
+                            FROM label_temp \
+                            WHERE \
+                                table_id = "+str(table_id)+" AND \
+                                label_value = '"+label_val+"' AND \
+                                label_provenance_col = '"+str(label_prov_col)+"' AND \
+                                label_provenance_row = '"+str(label_prov_row)+"')"
+                            
+            cur.execute(insert_lt)
 
     # Populate table_cell based on label_temp contents
     # Note that table_cell represents information about the position of a cell within a table rather than within the original file
