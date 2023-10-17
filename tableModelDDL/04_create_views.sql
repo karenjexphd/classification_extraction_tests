@@ -380,12 +380,13 @@ ALTER VIEW output_label_label_set OWNER TO table_model;
 
 \echo Create table_method_list view
 -- return one row per table and per method found in source_table
+-- exclude ground truth rows when generating list of table_methods
 -- should probably populate this directly during processing of the input files
 
 CREATE OR REPLACE VIEW table_method_list AS
     WITH 
       table_names AS (SELECT DISTINCT file_name||'_'||sheet_number||'_'||table_number AS table_name FROM source_table),
-      table_methods AS (SELECT DISTINCT table_method FROM source_table)
+      table_methods AS (SELECT DISTINCT table_method FROM source_table WHERE NOT table_is_gt)
     SELECT
       table_names.table_name,
       table_methods.table_method
