@@ -6,3 +6,4 @@ test_files/tabby_2_files/gt/tabbyxl/.~lock*
 test_files/tabby_2_files/xlsx/.~lock.*
 test_files/tabby_200_files/csv/.~lock.C10001.csv#
 test_files/tabby_200_files/csv/.~lock.C10002.xlsx#
+DockerImages/strudel_base/strudel_clone_tmp
