@@ -13,7 +13,7 @@
 # 1.DOCKER IMAGES
  
 # Docker images have been created and pushed to Docker Hub:
-# docker-pytheas, docker-hypoparsr and docker-tabby
+# docker-pytheas, docker-hypoparsr, docker-tabby, docker-strudel
 
 # 2. DOCKER GROUP
 
@@ -73,10 +73,11 @@ while getopts 'm:d:p:h' OPTION; do
         h)
           echo "script usage: $0 [-m methods] [-p filepath]"
           echo "-m   methods:       list of methods to evaluate (double-quoted, blank space-separated list)"
+          echo "                    accepted methods: pytheas, hypoparsr, tabbyxl, strudel"
           echo
           echo "-d   dataset_method: the name of the method associated with the available ground truth files"
           echo "-p   filepath:      path to input files."
-          echo "                    Expected structure: filepath/csv filepath/xlsx filepath/gt"
+          echo "                    expected structure: filepath/csv filepath/xlsx filepath/gt"
           echo
           exit 0
           ;;
@@ -89,9 +90,9 @@ done
 
 # set csv_filepath, xlsx_filepath and gt_filepath relative to filepath provided
 
-csv_filepath=$filepath/csv       # path to input files for Pytheas and Hypoparsr
-xlsx_filepath=$filepath/xlsx     # path to (annotated) input files for TabbyXL. Expects 1 per file in csv_filepath
-gt_filepath=$filepath/gt         # path to files containing associated ground truth
+csv_filepath=$filepath/csv         # path to input files for Pytheas and Hypoparsr
+xlsx_filepath=$filepath/xlsx       # path to (annotated) input files for TabbyXL
+gt_filepath=$filepath/gt           # path to files containing associated ground truth
 
 #  Note: Required directories will be mounted to the containers at runtime
 
@@ -152,7 +153,6 @@ echo
 echo INFO: creating outputdir $outputdir
 mkdir $outputdir
 
-
 #---- 1d. Get list of base filenames (filename.csv with extension removed)
 
 for file in $(ls $csv_filepath)
@@ -189,8 +189,8 @@ $pg_conn_table_model -f tableModelDDL/05_create_temp_tables.sql
 #----- 2. Map ground truth to table model                          -----#
 #-----------------------------------------------------------------------#
 
-# NB Mapping only needs to be done for the model the dataset belongs to
-# NB Currently only fully done for TabbyXL data
+# NOTE: We will always use TabbyXL format Ground Truth
+#       Can remove the dataset_method parameter and the logic around this
 
 # Get address of $START and $END cells if this is a TabbyXL dataset 
 
@@ -201,7 +201,6 @@ then
 fi
 
 # Call map_${dataset_method}.py passing TRUE for "is_gt"
-# NB Currently not using the is_gt switch in the script - is it needed?
 
 echo INFO: Mapping $dataset_method ground truth to table model
 for file in $(ls $gt_filepath)
