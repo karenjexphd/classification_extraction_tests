@@ -1,6 +1,7 @@
 from openpyxl import load_workbook
 import sys 
 import psycopg2
+import string
 
 # Goals: 
 #   Extract information from given Tabby ground truth file or output file and map it to table model
@@ -42,13 +43,25 @@ tm_conn = psycopg2.connect(
 cur = tm_conn.cursor()
 cur.execute('SET SEARCH_PATH=table_model')
 
-# retrieve existing data (table ID, table start/end col & row) from source_table for the file/sheet/table being processed
+
+def address2coords(cell_address):
+    # Function to return (numeric) coordinates of a spreadsheet cell based on its address
+    # A3 will return (1,3)  AA43 will return (27,43)
+    col=''.join(filter(str.isalpha, cell_address))   # alpha part of cell address
+    row=int(''.join(filter(str.isdigit, cell_address)))  # numeric part of cell address
+    num = 0
+    for c in col:
+        if c in string.ascii_letters:
+            num = num * 26 + (ord(c.upper()) - ord('A')) + 1
+    return num,row
+
+# retrieve existing data (table ID, table first/last col & row) from source_table for the file/sheet/table being processed
 
 select_stmt="SELECT table_id, \
-                    table_start_col, \
-                    table_start_row, \
-                    table_end_col, \
-                    table_end_row \
+                    table_first_col, \
+                    table_first_row, \
+                    table_last_col, \
+                    table_last_row \
             FROM source_table \
             WHERE table_is_gt=TRUE \
             AND file_name='"+filename+"' \
@@ -59,10 +72,10 @@ cur.execute(select_stmt)
 table_info = cur.fetchone()
 
 gt_table_id    = table_info[0]
-tablestart_col = table_info[1]
-tablestart_row = table_info[2]
-tableend_col   = table_info[3]
-tableend_row   = table_info[4]
+table_first_col = table_info[1]
+table_first_row = table_info[2]
+table_last_col   = table_info[3]
+table_last_row   = table_info[4]
 
 if is_gt:
 
@@ -77,20 +90,20 @@ else:
     insert_stmt="INSERT INTO source_table ( \
                     table_is_gt, \
                     table_method, \
-                    table_start_col, \
-                    table_start_row, \
-                    table_end_col, \
-                    table_end_row, \
+                    table_first_col, \
+                    table_first_row, \
+                    table_last_col, \
+                    table_last_row, \
                     file_name, \
                     sheet_number, \
                     table_number) \
                 VALUES ( \
                     FALSE, \
                     'tabbyxl', \
-                    '"+tablestart_col+"', \
-                    "+str(tablestart_row)+", \
-                    '"+tableend_col+"', \
-                    "+str(tableend_row)+", \
+                    "+str(table_first_col)+", \
+                    "+str(table_first_row)+", \
+                    "+str(table_last_col)+", \
+                    "+str(table_last_row)+", \
                     '"+filename+"', \
                     "+str(sheetnum)+", \
                     "+str(tablenum)+")"
@@ -134,13 +147,16 @@ for row in all_entries_rows:
     entry_labels = str(row[2].value)                          # value from LABELS column
     if entry_prov_text != 'PROVENANCE':                       # ignore header row
         # The provenance column contains a hyperlink and a display val
+
         # Extract just the display val, i.e. the part between "," and ")
         entry_prov=entry_prov_text.split('","')[1].split('")')[0]   
-        # The display val is a cell reference, e.g. C3. Split this into its alpha and numeric parts
-        entry_prov_col=''.join(filter(str.isalpha, entry_prov))        # alpha part
-        entry_prov_row=int(''.join(filter(str.isdigit, entry_prov)))   # numeric part
 
-        # NOTE: Have removed entry_labels from the following insert statement as the info is not used elsewhere
+        # The display val is a cell reference, e.g. C3. Convert to cell and row IDs
+        entry_prov_col=address2coords(entry_prov)[0]
+        entry_prov_row=address2coords(entry_prov)[1]
+
+        # entry_prov_col=''.join(filter(str.isalpha, entry_prov))        # alpha part
+        # entry_prov_row=int(''.join(filter(str.isdigit, entry_prov)))   # numeric part
 
         insert_et="INSERT INTO entry_temp (\
                     table_id, \
@@ -152,7 +168,7 @@ for row in all_entries_rows:
                     "+str(table_id)+", \
                     '"+str(entry_val)+"', \
                     '"+entry_prov+"', \
-                    '"+entry_prov_col+"', \
+                    "+str(entry_prov_col)+", \
                     "+str(entry_prov_row)+")"
         cur.execute(insert_et)
         # split entry_labels (on comma surrounded by double quotes) to get list of labels for this entry
@@ -163,7 +179,7 @@ for row in all_entries_rows:
                 label_prov=''
             else:
               label_prov=entry_label.split('[')[1].split(']')[0]
-            #print('table '+str(table_id)+' entry_label'+entry_label+' entry_prov '+entry_prov+' label_prov '+label_prov)
+
             # insert record into temp table entry_label_temp for this label
             insert_stmt_elt="INSERT INTO entry_label_temp (table_id, entry_provenance, label_provenance) \
                              VALUES ("+str(table_id)+",'"+entry_prov+"', '"+label_prov+"')"
@@ -173,14 +189,12 @@ for row in all_entries_rows:
 
 # The table_cell coordinates (left_col and top_row) represent the position of the cell within the table
 # The values are calculated from entry_provenance (the cell's position within the file) 
-# and tablestart, i.e. the position of the start of the table within the file
+# and the position of the first cell in the table within the file
 
 #   NOTES: 
 #     i.  The GT doesn't contain right_col, bottom_row or cell_datatype
 #         right_col and bottom_row are therefore inserted as duplicates of left_col and top_row
 #         cell_datatype is left empty
-#     ii. calculation for left_col only works with up to 26 columns (cols A-Z)
-#         will need additional logic for tables containing cols AA, AB etc
 
 insert_stmt="INSERT INTO table_cell (\
                     table_id, \
@@ -191,10 +205,10 @@ insert_stmt="INSERT INTO table_cell (\
                     cell_content, \
                     cell_annotation) \
             SELECT  "+str(table_id)+", \
-                    ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
-                    entry_provenance_row-"+str(tablestart_row)+", \
-                    ascii(entry_provenance_col)-ascii('"+tablestart_col+"'), \
-                    entry_provenance_row-"+str(tablestart_row)+", \
+                    entry_provenance_col-"+str(table_first_col)+", \
+                    entry_provenance_row-"+str(table_first_row)+", \
+                    entry_provenance_col-"+str(table_first_col)+", \
+                    entry_provenance_row-"+str(table_first_row)+", \
                     entry_value, 'DATA' \
             FROM entry_temp WHERE table_id="+str(table_id)
 cur.execute(insert_stmt)
@@ -220,17 +234,22 @@ for row in all_labels_rows:
     label_cat  = str(row[3].value)                             # value in CATEGORY column
     if label_prov_text != 'PROVENANCE':                        # ignore header row
         label_prov=label_prov_text.split('","')[1].split('")')[0]      # get display val between "," and ")
-        label_prov_col=''.join(filter(str.isalpha, label_prov))        # alpha part
-        label_prov_row=int(''.join(filter(str.isdigit, label_prov)))   # numeric part        
+
+        label_prov_col=address2coords(label_prov)[0]
+        label_prov_row=address2coords(label_prov)[1]
+
+        # label_prov_col=''.join(filter(str.isalpha, label_prov))        # alpha part
+        # label_prov_row=int(''.join(filter(str.isdigit, label_prov)))   # numeric part        
+
         # If the label has no parent labels, insert a row containing information for just this label
         if label_par=='None':
             insert_stmt="INSERT INTO label_temp (table_id, label_value, label_provenance, label_provenance_col, label_provenance_row, label_category) \
-                        VALUES ("+str(table_id)+",'"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_cat+"')"
+                        VALUES ("+str(table_id)+",'"+label_val+"', '"+label_prov+"', '"+str(label_prov_col)+"', '"+str(label_prov_row)+"', '"+label_cat+"')"
         # If the label has a parent, insert a row that includes provenance information for the parent label
         else:
             label_par_prov=label_par.split('[')[1].split(']')[0]           # get val between '[' and ']'
             insert_stmt="INSERT INTO label_temp (table_id, label_value, label_provenance, label_provenance_col, label_provenance_row, label_parent, label_category) \
-                        VALUES ("+str(table_id)+",'"+label_val+"', '"+label_prov+"', '"+label_prov_col+"', '"+str(label_prov_row)+"', '"+label_par_prov+"', '"+label_cat+"')"
+                        VALUES ("+str(table_id)+",'"+label_val+"', '"+label_prov+"', '"+str(label_prov_col)+"', '"+str(label_prov_row)+"', '"+label_par_prov+"', '"+label_cat+"')"
         cur.execute(insert_stmt)
 
 # Populate the category table from the label_categories in label_temp
@@ -245,10 +264,10 @@ cur.execute(insert_stmt_cat)
 insert_stmt="INSERT INTO table_cell \
             (table_id, left_col, top_row, right_col, bottom_row, cell_content, cell_annotation) \
             SELECT  "+str(table_id)+", \
-                    ascii(label_provenance_col)-ascii('"+tablestart_col+"'), \
-                    label_provenance_row-"+str(tablestart_row)+", \
-                    ascii(label_provenance_col)-ascii('"+tablestart_col+"'), \
-                    label_provenance_row-"+str(tablestart_row)+", \
+                    label_provenance_col-"+str(table_first_col)+", \
+                    label_provenance_row-"+str(table_first_row)+", \
+                    label_provenance_col-"+str(table_first_col)+", \
+                    label_provenance_row-"+str(table_first_row)+", \
                     label_value, 'HEADING' \
             FROM label_temp WHERE table_id="+str(table_id)
 cur.execute(insert_stmt)

@@ -10,10 +10,10 @@ CREATE TABLE IF NOT EXISTS table_model.source_table
   table_number integer,
   table_is_gt  boolean DEFAULT FALSE,
   table_method text,
-  table_start_col text,
-  table_start_row integer,
-  table_end_col text,
-  table_end_row integer,
+  table_first_col integer,
+  table_first_row integer,
+  table_last_col integer,
+  table_last_row integer,
   PRIMARY KEY (table_id)
 );
 
@@ -24,10 +24,10 @@ COMMENT ON COLUMN table_model.source_table.table_id IS 'surrogate key to uniquel
 COMMENT ON COLUMN table_model.source_table.file_name IS 'name of input file';
 COMMENT ON COLUMN table_model.source_table.sheet_number IS 'identifier of sheet within input file';
 COMMENT ON COLUMN table_model.source_table.table_number IS 'identified of table within sheet';
-COMMENT ON COLUMN table_model.source_table.table_start_col IS 'position of column directly to left of table. Column 0 within table';
-COMMENT ON COLUMN table_model.source_table.table_start_row IS 'position of row directly above table. Row 0 within table';
-COMMENT ON COLUMN table_model.source_table.table_end_col IS 'position of column directly to right of table.';
-COMMENT ON COLUMN table_model.source_table.table_end_row IS 'position of row directly below table.';
+COMMENT ON COLUMN table_model.source_table.table_first_col IS 'position of first column in table';
+COMMENT ON COLUMN table_model.source_table.table_first_row IS 'position of first row in table';
+COMMENT ON COLUMN table_model.source_table.table_last_col IS 'position of last column in table.';
+COMMENT ON COLUMN table_model.source_table.table_last_row IS 'position of last row in table.';
 COMMENT ON COLUMN table_model.source_table.table_is_gt IS 'TRUE if this row represents the ground truth for the table';
 COMMENT ON COLUMN table_model.source_table.table_method IS 'name of the method used to extract the table, or if table_is_gt is TRUE, the method associated with the data set';
 

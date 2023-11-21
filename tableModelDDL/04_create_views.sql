@@ -13,8 +13,8 @@ CREATE VIEW tabby_cell_view AS
 SELECT 
   st.table_id,
   tc.cell_id, 
-  'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row as cell_address, 
-  chr(ascii(st.table_start_col) + tc.left_col)||(st.table_start_row + tc.top_row) AS cell_provenance,
+  'L'||tc.left_col||'T'||tc.top_row||'R'||tc.right_col||'B'||tc.bottom_row as cell_address,
+  (st.table_first_col + tc.left_col)||','||(st.table_first_row + tc.top_row) AS cell_provenance,
   cell_content,
   cell_annotation 
 FROM table_cell tc 

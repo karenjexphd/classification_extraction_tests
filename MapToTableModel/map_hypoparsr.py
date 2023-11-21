@@ -51,30 +51,30 @@ cur.execute('SET SEARCH_PATH=table_model')
 # 3. Process table(s) in input (GT) file
 
 #    Currently processing a single table per Hypoparsr GT file
-#    table_number, table_start_col and table_start_row all hardcoded to 0
+#    table_number, table_first_col and table_first_row all hardcoded to 0
 #    Can Hypoparsr GT files contain multiple tables?
 
 sheet_num=0
 table_num=0
 
-tablestart_col=0
-tablestart_row=0
+table_first_col=0
+table_first_row=0
 
 # 3.1 Insert into source_table (sheetnum will always be zero for Hypoparsr, tableend isn't being populated for now)
 
 insert_stmt="INSERT INTO source_table( \
                 table_is_gt, \
                 table_method, \
-                table_start_col, \
-                table_start_row, \
+                table_first_col, \
+                table_first_row, \
                 file_name, \
                 sheet_number, \
                 table_number) \
             VALUES ( \
                 "+table_is_gt+", \
                 'hypoparsr', \
-                '"+str(tablestart_col)+"', \
-                "+str(tablestart_row)+", \
+                '"+str(table_first_col)+"', \
+                "+str(table_first_row)+", \
                 '"+filename+"', \
                 "+str(sheet_num)+", \
                 "+str(table_num)+")"
@@ -116,8 +116,8 @@ cur.execute(insert_stmt_cat)
 #          Current assumption: only 1 row of headings
 
 # if tablestart is (0,0), then heading starts at (1,1):
-heading_col=tablestart_col+1
-heading_row=tablestart_row+1
+heading_col=table_first_col+1
+heading_row=table_first_row+1
 
 for col in df_columns:
     #print(col)
@@ -139,7 +139,7 @@ for col in df_columns:
 #     for each (data) row in dataframe, insert each cell into entry_temp.
 
 first_data_row=heading_row+1          # first data row is row after last heading row
-first_data_col=tablestart_col+1       # first data col is same as first heading col
+first_data_col=table_first_col+1       # first data col is same as first heading col
 
 for row_id in range(num_rows):
   col_id=first_data_col               # reset col_id for each row

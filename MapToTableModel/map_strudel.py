@@ -14,28 +14,27 @@ import pandas
 
 # Test files (COMMENT ONCE FINISHED TESTING AND UNCOMMENT INPUT PARAMETERS)
 
-input_filepath='/tmp/kjtest'
-# line_classifications
-input_filename='tabby_200_files_cstrudel.csv'
-# cell_classifications
+# input_filepath='/tmp/kjtest'
+# is_gt=False
+## if testing line_classifications:
 # input_filename='tabby_200_files_cstrudel.csv'
-is_gt=False
+## if testing cell_classifications:
+# input_filename='tabby_200_files_cstrudel.csv'
 
 # 1. Process input parameters:
 
 #   i. input_filepath       path to file to be processed
-# input_filepath = str(sys.argv[1])               
+input_filepath = str(sys.argv[1])               
 #   ii. input_filename       name of file to be processed (<filename>.json)
-# input_filename = str(sys.argv[2])               
+input_filename = str(sys.argv[2])               
 #   iii. is_gt                TRUE if this is a file containing ground truth, FALSE if is is an output file 
-# if str(sys.argv[3]) == 'TRUE':
-#     is_gt=True
-# else:
-#     is_gt=False
+if str(sys.argv[3]) == 'TRUE':
+    is_gt=True
+else:
+    is_gt=False
 
 filetype   = input_filename.split('.csv')[0].split('_')[-1]
-print('filetype:',filetype)
-
+# print('filetype:',filetype)
 
 if filetype=='cstrudel':
     # Continue only if this is the output of cell classification
@@ -78,16 +77,16 @@ if filetype=='cstrudel':
         # restrict rows to just those with this file_name, and colums to 'row_index', 'column_index' and 'predict'
         filedata=dataset.loc[dataset['file_name'] == filename, ['row_index','column_index','predict']]
 
-        print(filedata)
+        # print(filedata)
 
-        # retrieve existing data (table ID, table start/end col & row) 
-        # from source_table for the file/table being processed
+        # retrieve existing data (table ID, table first/last col & row) 
+        # from source_table for the file/table being processed (this was populated by get_start_end.py earlier in the processing)
 
         select_stmt="SELECT table_id, \
-                            table_start_col, \
-                            table_start_row, \
-                            table_end_col, \
-                            table_end_row \
+                            table_first_col, \
+                            table_first_row, \
+                            table_last_col, \
+                            table_last_row \
                     FROM source_table \
                     WHERE table_is_gt=TRUE \
                     AND file_name='"+filename+"' \
@@ -102,10 +101,10 @@ if filetype=='cstrudel':
 
         try:
             gt_table_id    = table_info[0]
-            tablestart_col = table_info[1]
-            tablestart_row = table_info[2]
-            tableend_col   = table_info[3]
-            tableend_row   = table_info[4]
+            # table_first_col = table_info[1]
+            # table_first_row = table_info[2]
+            # table_last_col   = table_info[3]
+            # table_last_row   = table_info[4]
         except TypeError:
             print('WARNING: No ground truth exists for this table')
 
@@ -117,7 +116,7 @@ if filetype=='cstrudel':
 
         else:
             
-            # We're processing the output file so we need to populate source_table with the information just retrieved
+            # We're processing an output file so we need to populate source_table
 
             insert_stmt="INSERT INTO source_table ( \
                             table_is_gt, \
@@ -154,31 +153,28 @@ if filetype=='cstrudel':
 
             # file_name
             # sheet_name
-            # row_index
-            # column_index
-            # predict         <-- not sure if we want "predict" or "label" - check code
-
-        # Populate entry_temp
-
-        # Required enhancement: create separate temp table for the cell classification
-        #                       (currently using entry_value in entry_temp to store the cell type)
+            # row_index       <-- index starts at 0 - add 1 to match TabbyXL ?
+            # column_index    <-- index starts at 0 - add 1 to match TabbyXL ?
+            # predict         <-- classification predicted by strudel
 
         # Create a list of tuples from the dataframe values
         tuples = [tuple(x) for x in filedata.to_numpy()]
         cols=('row_index','column_index','predict')
 
-        insert_et="INSERT INTO entry_temp (\
-            entry_provenance_row, \
-            entry_provenance_col, \
-            entry_value) \
+        # Populate cell_temp (batch insert from dataframe using extras.execute_values())
+
+        insert_et="INSERT INTO cell_temp (\
+            cell_provenance_row, \
+            cell_provenance_col, \
+            cell_classification) \
           VALUES %s"
 
         extras.execute_values(cur, insert_et, tuples)
 
-        # Set table_id
-        cur.execute("UPDATE entry_temp set table_id="+str(table_id))
+        # Set table_id (DON'T NEED THIS - WE'RE ONLY PROCESSING ONE TABLE AT A TIME)
+        # cur.execute("UPDATE cell_temp set table_id="+str(table_id))
 
-        # Populate table_cell from entry_temp
+        # Populate table_cell from cell_temp for cells classified as Group, Header, Data or Derived
 
         insert_stmt="INSERT INTO table_cell (\
                             table_id, \
@@ -186,29 +182,55 @@ if filetype=='cstrudel':
                             top_row, \
                             cell_annotation) \
                     SELECT  "+str(table_id)+", \
-                            CAST(entry_provenance_col AS INTEGER), \
-                            entry_provenance_row, \
-                            entry_value \
-                    FROM entry_temp"
+                            CAST(cell_provenance_col AS INTEGER), \
+                            cell_provenance_row, \
+                            cell_classification \
+                    FROM cell_temp \
+                    WHERE cell_classification in ('heading','group', 'data', 'derived')"
         cur.execute(insert_stmt)
 
-        # Populate entry based on table_cell
+        table_info = cur.fetchone() 
+
+        table_id = table_info[0]
+        print('INFO: source_table.table_id: '+str(table_id))
+
+        # get min/max row/col values from table_cell and update table_first_... and table_last_... in source_table
+
+        update_st="UPDATE source_table \
+                    SET table_first_col = subquery.t_first_col, \
+                        table_first_row = subquery.t_first_row, \
+                        table_last_col = subquery.t_last_col, \
+                        table_last_row = subquery.t_last_row \
+                    FROM ( \
+                        SELECT min(top_row) t_first_col, \
+                            max(top_row) t_first_row, \
+                            min(left_col) t_last_col, \
+                            max(left_col) t_last_row \
+                        FROM table_cell \
+                        WHERE table_id="+str(table_id)+" ) subquery \
+                    WHERE table_id="+str(table_id)
+
+        cur.execute(update_st)
+
+        # Populate entry from table_cell where cell is classified as data or derived
 
         insert_stmt="INSERT INTO entry (entry_cell_id) \
                     SELECT cell_id FROM table_cell \
-                    WHERE table_id="+str(table_id)+" AND cell_annotation ='DATA'"
+                    WHERE table_id="+str(table_id)+" \
+                    AND cell_annotation in ('data','derived')"
         cur.execute(insert_stmt)
 
-        # Populate label based on table_cell
+        # Populate label from table_cell where cell is classified as heading or group
 
         insert_stmt="INSERT INTO label (label_cell_id) \
                     SELECT cell_id FROM table_cell \
-                    WHERE table_id="+str(table_id)+" AND cell_annotation='HEADING'"
+                    WHERE table_id="+str(table_id)+" \
+                    AND cell_annotation in ('heading','group')"
         cur.execute(insert_stmt)
 
-        # Truncate entry_temp for this table
+        # Truncate cell_temp for this table
 
-        cur.execute('TRUNCATE TABLE entry_temp')
+        cur.execute('TRUNCATE TABLE cell_temp')
 
     cur.execute('COMMIT')
     cur.close()

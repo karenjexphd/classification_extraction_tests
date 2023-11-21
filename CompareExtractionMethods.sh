@@ -192,7 +192,9 @@ $pg_conn_table_model -f tableModelDDL/05_create_temp_tables.sql
 # NOTE: We will always use TabbyXL format Ground Truth
 #       Can remove the dataset_method parameter and the logic around this
 
-# Get address of $START and $END cells if this is a TabbyXL dataset 
+
+# Get address of $START and $END cells found in each file in xlsx_filepath
+# Insert row into source_table for each table
 
 if [[ $dataset_method == tabbyxl ]]
 then

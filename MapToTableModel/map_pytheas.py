@@ -3,7 +3,6 @@ import psycopg2
 import json
 import re
 
-
 # Goals: 
 #   Extract information from given Pytheas ground truth file or output file and map it to table model
 #   Note: a Pytheas output file may contain one or more tables in the discovered_tables section
@@ -106,14 +105,14 @@ for tabkey in tables:
     # Subtract 1 from tabkey to get table number because Pytheas indexes tables from 1 whereas GT tables are indexed from 0
     table_num = int(tabkey)-1
 
-    # retrieve existing data (table ID, table start/end col & row) from source_table for the file/table being processed
+    # retrieve existing data (table ID, table first/last col & row) from source_table for the file/table being processed
     # note that sheet_number is always 0 for pytheas
 
     select_stmt="SELECT table_id, \
-                        table_start_col, \
-                        table_start_row, \
-                        table_end_col, \
-                        table_end_row \
+                        table_first_col, \
+                        table_first_row, \
+                        table_last_col, \
+                        table_last_row \
                 FROM source_table \
                 WHERE table_is_gt=TRUE \
                 AND file_name='"+filename+"' \
@@ -128,10 +127,10 @@ for tabkey in tables:
 
     try:
         gt_table_id    = table_info[0]
-        tablestart_col = table_info[1]
-        tablestart_row = table_info[2]
-        tableend_col   = table_info[3]
-        tableend_row   = table_info[4]
+        # table_first_col = table_info[1]
+        # table_first_row = table_info[2]
+        # table_last_col   = table_info[3]
+        # table_last_row   = table_info[4]
     except TypeError:
         print('WARNING: No ground truth exists for this table')
 
@@ -143,14 +142,16 @@ for tabkey in tables:
 
     else:       
         
-        # We're processing the output file so we need to populate source_table with the information just retrieved
-        # note that pytheas only provides table_start_row and table_end_row, not table_start_col or table_end_col
+        # We're processing the output file so we need to create a row in source_table with the information just retrieved
+        # note that pytheas only provides table_first_row and table_last_row, not table_first_col or table_last_col
+
+        # ** MAY BE ABLE TO INFER TABLE_FIRST_COL and TABLE_LAST_COL BASED ON COLUMNS IN OUTPUT **
 
         insert_stmt="INSERT INTO source_table ( \
                         table_is_gt, \
                         table_method, \
-                        table_start_row, \
-                        table_end_row, \
+                        table_first_row, \
+                        table_last_row, \
                         file_name, \
                         sheet_number, \
                         table_number) \
@@ -186,7 +187,6 @@ for tabkey in tables:
     # label_rows=table['header']       # header is list of rows containing headers - only exists in the GT, not the output
 
     # get cells containing column headings and populate label_temp temporary table
-
     columns=table['columns']
 
     col_nums=[]         # gather list of columns to allow identification of heading and data cells
